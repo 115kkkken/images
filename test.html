@@ -169,7 +169,6 @@
   let preloadDone = false;
 
   async function preloadImagesForAll() {
-    // collect unique (id,img) pairs from leaders, aCardsByType, bCards, cCards
     const items = [];
     const pushUnique = (id, img) => {
       if (!id || !img) return;
@@ -181,10 +180,8 @@
     bCards.forEach(c => pushUnique(c.id, c.img));
     cCards.forEach(c => pushUnique(c.id, c.img));
 
-    // show loading status
     const statusEl = document.getElementById('loadingStatus');
     statusEl.textContent = '正在預載圖片…';
-    // Preload with concurrency
     await Promise.all(items.map(item => new Promise(resolve => {
       const img = new Image();
       img.onload = () => { imageCache[item.id] = img; resolve(); };
@@ -210,8 +207,7 @@
   ];
 
   function imgForId(id){
-    // adjust extension/name to match your repo (this example uses lowercase .jpg)
-    return `images/${id.toLowerCase()}.jpg`;
+    return `images/${id.toLowerCase()}.jpg`; // adjust to your filenames
   }
 
   const leaders = [
@@ -243,7 +239,7 @@
     nether: [
       { id:'A_NT_1', name:'幽影獵手', cost:2, maxCopies:3, img: imgForId('A_NT_1') },
       { id:'A_NT_2', name:'冥火術士', cost:3, maxCopies:2, img: imgForId('A_NT_2') },
-      { id:'A_NT_3', name:'���無行者', cost:4, maxCopies:1, img: imgForId('A_NT_3') },
+      { id:'A_NT_3', name:'虛無行者', cost:4, maxCopies:1, img: imgForId('A_NT_3') },
       { id:'A_NT_4', name:'沉默守衛', cost:2, maxCopies:3, img: imgForId('A_NT_4') },
       { id:'A_NT_5', name:'幽冥博士', cost:1, maxCopies:5, img: imgForId('A_NT_5') }
     ]
@@ -291,9 +287,7 @@
   remainingBudgetEl.textContent = MAX_BUDGET;
   selectedCountEl.textContent = 0;
 
-  // ---------------------------
-  // Rendering & logic (unchanged behavior)
-  // ---------------------------
+  // Rendering & logic (same as before)...
   function renderLeaders(){
     leadersList.innerHTML = '';
     leaders.forEach(ld=>{
@@ -345,7 +339,6 @@
       });
     });
   }
-
   function renderBCards(){ bCardsArea.innerHTML=''; bCards.forEach(card=> bCardsArea.appendChild(makeCardCheckbox(card, campSelections.has(card.id), 'b', false, ()=> toggleCampCard(card)))); }
   function renderCCards(){ cCardsArea.innerHTML=''; cCards.forEach(card=> cCardsArea.appendChild(makeCardCheckbox(card, campSelections.has(card.id), 'c', false, ()=> toggleCType(card)))); updateCCheckboxStates(); }
 
@@ -400,7 +393,7 @@
     usedBudget = 0; updateBudgetDisplay(); updateSelectedCount();
   }
 
-  // lineup UI & unit management (unchanged behavior)
+  // lineup UI & unit management code (same as before)...
   function renderLineupGallery(){
     lineupGallery.innerHTML = '';
     if(!campCards.length){ lineupGallery.innerHTML = '<div class="hint">請先建立大本營 (Camp) 以加入先發卡池。</div>'; return; }
@@ -531,24 +524,29 @@
   function updateSelectedCount(){ selectedCountEl.textContent = units.length; }
 
   // ---------------------------
-  // Export (use cached images and drawContain to preserve aspect ratio)
+  // Export: draw images with containment and fixed image boxes (no cropping, no overlap)
   // ---------------------------
   async function exportDeckAsImage(deckName, tactics){
-    const scaleFactor = 2; // increase for higher resolution
+    const scaleFactor = 2;
     const baseW = 1200;
     const padding = 24;
     const cardsPerRow = 6;
-    const cardBoxH = 110;
-    const headerH = 120;
-    const smallText = 14;
 
-    // layout
-    const cardW = Math.floor((baseW - padding*2 - (cardsPerRow-1)*12)/cardsPerRow);
+    // fixed image box sizes (same for every small card)
+    const cardImageW =  (Math.floor((baseW - padding*2 - (cardsPerRow-1)*12)/cardsPerRow)); // width of card box
+    const cardImageH = 90; // height reserved for the image area (keeps uniform size)
+    const labelH = 20; // label area under image
+    const cardBoxH = cardImageH + labelH + 6; // total row height per card (consistent)
+
     const campRows = Math.ceil(campCards.length / cardsPerRow);
     const unitsPerRow = 4;
-    const unitW = Math.floor((baseW - padding*2 - (unitsPerRow-1)*12)/unitsPerRow);
+    const unitImageW = Math.floor((baseW - padding*2 - (unitsPerRow-1)*12)/unitsPerRow);
+    const unitImageH = 110; // fixed unit image H
+    const unitBoxH = unitImageH + labelH + 14; // total unit box height
+
     const unitRows = Math.max(1, Math.ceil(units.length / unitsPerRow));
-    const hBase = padding*2 + headerH + campRows*cardBoxH + 24 + unitRows*(220);
+    const headerH = 120;
+    const hBase = padding*2 + headerH + campRows*cardBoxH + 24 + unitRows*(unitBoxH + 20);
     const canvasW = baseW * scaleFactor;
     const canvasH = Math.max(600, Math.floor(hBase * scaleFactor));
 
@@ -557,10 +555,10 @@
     const ctx = canvas.getContext('2d');
     ctx.scale(scaleFactor, scaleFactor);
 
-    // background and header
+    // background & header
     ctx.fillStyle = '#071018'; ctx.fillRect(0,0,baseW,canvasH/scaleFactor);
     ctx.fillStyle = '#fff'; ctx.font = `700 28px sans-serif`; ctx.fillText(deckName, padding, padding + 28);
-    ctx.font = `${smallText}px sans-serif`; ctx.fillStyle = '#cfe8ff';
+    ctx.font = `14px sans-serif`; ctx.fillStyle = '#cfe8ff';
     const tacticsLines = wrapText(ctx, tactics, baseW - padding*2);
     tacticsLines.forEach((ln,i)=> ctx.fillText(ln, padding, padding + 28 + (i+1)*18));
     const rem = Math.max(0, MAX_BUDGET - usedBudget);
@@ -568,23 +566,32 @@
     ctx.fillText(`剩餘費用: ${rem}`, baseW - padding - 220, padding + 24);
     ctx.fillText(`已選卡牌數量: ${units.length}`, baseW - padding - 220, padding + 44);
 
-    // camp title + grid
+    // camp title
     let y = padding + headerH;
     ctx.fillStyle = '#cfe8ff'; ctx.font = `600 16px sans-serif`; ctx.fillText('大本營牌庫', padding, y - 10);
 
+    // draw camp grid: each card uses fixed image box (cardImageW x cardImageH) and we CENTER and CONTAIN the original image into that box.
     let cx = padding; let cy = y + 12; let col = 0;
     campCards.forEach((c,i)=>{
       const img = imageCache[c.id] || null;
-      ctx.fillStyle = 'rgba(255,255,255,0.02)'; ctx.fillRect(cx, cy, cardW, 100);
-      // draw WITH preserved aspect ratio and fully inside the box (no cropping)
+      // card background
+      ctx.fillStyle = 'rgba(255,255,255,0.02)'; ctx.fillRect(cx, cy, cardImageW, cardBoxH - 6);
+      // draw contained image centered inside (no cropping)
       if(img){
-        drawImageContain(ctx, img, cx, cy, cardW, 70);
+        // clip to the image box area to ensure no overflow (defensive)
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(cx, cy, cardImageW, cardImageH);
+        ctx.clip();
+        drawImageContain(ctx, img, cx, cy, cardImageW, cardImageH);
+        ctx.restore();
       } else {
-        ctx.fillStyle = 'rgba(255,255,255,0.01)'; ctx.fillRect(cx, cy, cardW, 70);
-        ctx.fillStyle = '#ccc'; ctx.font = `12px sans-serif`; ctx.fillText('圖示無法載入', cx + 8, cy + 36);
+        ctx.fillStyle = 'rgba(255,255,255,0.01)'; ctx.fillRect(cx, cy, cardImageW, cardImageH);
+        ctx.fillStyle = '#ccc'; ctx.font = `12px sans-serif`; ctx.fillText('圖示無法載入', cx + 8, cy + (cardImageH/2));
       }
-      ctx.fillStyle = '#fff'; ctx.font = `600 12px sans-serif`; ctx.fillText(c.name, cx + 6, cy + 88);
-      col++; cx += cardW + 12; if(col >= cardsPerRow){ col = 0; cx = padding; cy += cardBoxH; }
+      // name under image in reserved label area
+      ctx.fillStyle = '#fff'; ctx.font = `600 12px sans-serif`; ctx.fillText(c.name, cx + 6, cy + cardImageH + 14);
+      col++; cx += cardImageW + 12; if(col >= cardsPerRow){ col = 0; cx = padding; cy += cardBoxH; }
     });
 
     // units section
@@ -595,20 +602,25 @@
     units.forEach((u,i)=>{
       const card = campCards.find(c=>c.id===u.cardId) || { name:u.cardName, img: '' };
       const img = imageCache[card.id] || null;
-      ctx.fillStyle = 'rgba(255,255,255,0.02)'; ctx.fillRect(ux, uy, unitW, 180);
-      if(img) {
-        drawImageContain(ctx, img, ux, uy, unitW, 96);
+      ctx.fillStyle = 'rgba(255,255,255,0.02)'; ctx.fillRect(ux, uy, unitImageW, unitBoxH - 10);
+      if(img){
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(ux, uy, unitImageW, unitImageH);
+        ctx.clip();
+        drawImageContain(ctx, img, ux, uy, unitImageW, unitImageH);
+        ctx.restore();
       } else {
-        ctx.fillStyle='rgba(255,255,255,0.01)'; ctx.fillRect(ux,uy,unitW,96);
-        ctx.fillStyle='#ccc'; ctx.font='12px sans-serif'; ctx.fillText('圖示無法載入', ux + 8, uy + 48);
+        ctx.fillStyle='rgba(255,255,255,0.01)'; ctx.fillRect(ux,uy,unitImageW,unitImageH);
+        ctx.fillStyle='#ccc'; ctx.font='12px sans-serif'; ctx.fillText('圖示無法載入', ux + 8, uy + (unitImageH/2));
       }
-      ctx.fillStyle = '#fff'; ctx.font = `600 13px sans-serif`; ctx.fillText(card.name, ux + 8, uy + 116);
+      ctx.fillStyle = '#fff'; ctx.font = `600 13px sans-serif`; ctx.fillText(card.name, ux + 8, uy + unitImageH + 16);
       ctx.fillStyle = '#9ae6b4'; ctx.font = `500 12px sans-serif`;
       const ups = Array.from(u.upgrades).map(k=> (UPGRADES.find(x=>x.key===k) || {}).label ).filter(Boolean);
       const upText = ups.length ? ups.join(' / ') : '無';
-      wrapDrawText(ctx, upText, ux + 8, uy + 136, unitW - 12, 14);
-      ux += unitW + 12;
-      if((i+1) % 4 === 0){ ux = padding; uy += 200; }
+      wrapDrawText(ctx, upText, ux + 8, uy + unitImageH + 36, unitImageW - 12, 14);
+      ux += unitImageW + 12;
+      if((i+1) % unitsPerRow === 0){ ux = padding; uy += unitBoxH + 20; }
     });
 
     return new Promise((resolve)=>{
@@ -624,10 +636,10 @@
     });
   }
 
-  // draw image contained (no cropping), centered to box
+  // drawImageContain: draw image fully inside box, preserve original aspect ratio; image is centered, not cropped
   function drawImageContain(ctx, img, x, y, w, h){
     if(!img) return;
-    const iw = img.width, ih = img.height;
+    const iw = img.width || 1, ih = img.height || 1;
     const scale = Math.min(w/iw, h/ih);
     const nw = iw * scale;
     const nh = ih * scale;
@@ -659,11 +671,8 @@
     if(line) ctx.fillText(line, x, curY);
   }
 
-  // ---------------------------
-  // Init: preload images then render UI
-  // ---------------------------
+  // Init and event wiring (same as previous)
   async function init(){
-    // disable UI interactions while preloading
     document.getElementById('enterLineupBtn').disabled = true;
     document.getElementById('confirmBtn').disabled = true;
     document.getElementById('clearLineupBtn').disabled = true;
@@ -671,17 +680,14 @@
 
     await preloadImagesForAll();
 
-    // now UI enabled
     document.getElementById('enterLineupBtn').disabled = false;
     document.getElementById('confirmBtn').disabled = false;
     document.getElementById('clearLineupBtn').disabled = false;
     document.getElementById('resetCampBtn').disabled = false;
 
-    // initial render
     renderLeaders(); renderACards(); renderBCards(); renderCCards(); updateLimitHints();
   }
 
-  // wire events
   document.getElementById('tabCamp').addEventListener('click', ()=> { tabCamp.classList.add('active'); tabLineup.classList.remove('active'); campStage.style.display = ''; lineupStage.style.display = 'none'; });
   document.getElementById('tabLineup').addEventListener('click', ()=> { tabLineup.classList.add('active'); tabCamp.classList.remove('active'); campStage.style.display = 'none'; lineupStage.style.display = ''; });
   document.getElementById('enterLineupBtn').addEventListener('click', ()=> { if(!chosenLeaderId){ alert('請先選擇一位領主。'); return;} buildCampCardsFromSelections(); renderLineupGallery(); tabLineup.click(); });
@@ -690,12 +696,11 @@
   document.getElementById('clearLineupBtn').addEventListener('click', ()=> { if(!confirm('重置先發將清除所有選擇數量與升級，確定嗎？')) return; const leaderUnit = units.find(u => u.isLeader); units.length = 0; if(leaderUnit) units.push(leaderUnit); lineupCounts.clear(); campCards.forEach(c => lineupCounts.set(c.id, c.isLeader ? 1 : 0)); usedBudget = 0; updateBudgetDisplay(); renderLineupGallery(); });
   document.getElementById('confirmBtn').addEventListener('click', ()=> { openConfirmModal(); });
 
-  // modal
   function openConfirmModal(){
     const backdrop = document.createElement('div'); backdrop.className = 'modal-backdrop';
     const modal = document.createElement('div'); modal.className = 'modal';
     modal.innerHTML = `
-      <h3>匯出先發陣容</h3>
+      <h3>匯出先���陣容</h3>
       <label>副牌組名稱：</label>
       <input id="deckName" type="text" placeholder="輸入牌組名稱">
       <label>戰術打法：</label>
@@ -711,7 +716,6 @@
     modal.querySelector('#doExport').addEventListener('click', async ()=> { const name = modal.querySelector('#deckName').value || '未命名牌組'; const tactics = modal.querySelector('#deckTactics').value || ''; await exportDeckAsImage(name, tactics); document.body.removeChild(backdrop); });
   }
 
-  // kickoff
   init();
 </script>
 </body>
