@@ -180,7 +180,7 @@
   // Helper to convert id to image filename in docs/images/
   function imgForId(id){
     // produce lowercase, remove non-alphanum, replace underscores with hyphens for nicer filenames:
-    return `images/${id.toLowerCase().replace(/[^a-z0-9_]/g,'').replace(/_/g,'-')}.jpg`;
+     return `${id.toLowerCase()}.jpg`;
   }
 
   // Leaders (6) - image set to relative path via imgForId
@@ -686,4 +686,5 @@
   renderLeaders(); renderACards(); renderBCards(); renderCCards(); updateLimitHints();
 </script>
 </body>
+
 </html>
