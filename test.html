@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>勝者為王 - 大本營 & 先發構築器</title>
+  <title>勝者為王 - 牌組構築器</title>
   <style>
     :root{
       --topbar-height:64px;
@@ -38,7 +38,7 @@
     .section-title{font-weight:700;margin-bottom:8px;color:#cfe8ff;}
     .card-list{display:flex;flex-wrap:wrap;gap:10px;}
     .card-item{width:calc(33.333% - 8px); min-width:140px; background:rgba(255,255,255,0.02); padding:8px; border-radius:8px; border:1px solid rgba(255,255,255,0.03); box-sizing:border-box;}
-    .card-item img{width:100%; border-radius:6px;}
+    .card-item img{width:100%; border-radius:6px; display:block; height:140px; object-fit:cover;}
     .card-meta{display:flex;justify-content:space-between;align-items:center;margin-top:6px;font-size:13px;}
     .card-meta .small{opacity:.9;}
     .card-controls{display:flex;align-items:center;gap:8px;margin-top:8px;justify-content:center;}
@@ -46,7 +46,7 @@
     .card-controls input[type="checkbox"]{transform:scale(1.1);}
     .sub-gallery{display:flex;flex-wrap:wrap;gap:12px;margin-top:12px;justify-content:center;}
     .sub-card{width:calc(20% - 12px);min-width:140px;background:rgba(255,255,255,0.02);border-radius:8px;padding:8px;box-sizing:border-box;border:1px solid rgba(255,255,255,0.03);}
-    .sub-card img{width:100%;border-radius:6px;}
+    .sub-card img{width:100%;border-radius:6px; display:block; height:120px; object-fit:cover;}
     .card-cost{color:#9ae6b4;font-weight:700;margin-top:6px;}
     .card-max{margin-top:4px;color:#cfe8ff;opacity:.9;font-size:13px;}
     .count{min-width:36px;text-align:center;font-weight:700;}
@@ -56,7 +56,7 @@
     .selected-units-wrap{margin-top:18px;}
     .selected-units{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin-top:8px;}
     .unit-card{width:calc(20% - 12px);min-width:160px;background:rgba(255,255,255,0.02);border-radius:8px;padding:8px;box-sizing:border-box;border:1px solid rgba(255,255,255,0.03);}
-    .unit-card img{width:100%;border-radius:6px;}
+    .unit-card img{width:100%;border-radius:6px; display:block; height:120px; object-fit:cover;}
     .unit-card .unit-title{font-weight:700;margin-top:6px;}
     .upgrades{display:flex;flex-direction:column;gap:6px;margin-top:8px;}
     .upgrade-btn{padding:6px 8px;border-radius:6px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:var(--accent);cursor:pointer;}
@@ -90,11 +90,12 @@
       <div class="label">已選卡牌數量</div>
       <div id="selectedCount" class="value">0</div>
     </div>
+    <div style="width:18px"></div>
+    <div id="loadingStatus" style="color:#cfe8ff;font-size:13px;opacity:.9"></div>
   </div>
 
   <div class="container">
     <h1>勝者為王 - 牌組構築器</h1>
-    
 
     <div class="stage-tabs" role="tablist" aria-label="階段切換">
       <button id="tabCamp" class="active">大本營牌庫</button>
@@ -161,11 +162,42 @@
   </div>
 
 <script>
-  // CONFIG: Use relative image paths under /docs/images for GitHub Pages.
-  // Naming convention used here: image file names are lowercase ids, e.g.:
-  // leaders: l_d_a.webp  a-cards: a_de_1.webp  b-cards: b_1.webp  c-cards: c_1.webp
-  // Put them in docs/images/ so index.html (in docs/) can load "images/xxx.webp" quickly via Pages.
+  // ---------------------------
+  // Image preloading / caching
+  // ---------------------------
+  const imageCache = {}; // map: cardId -> Image object
+  let preloadDone = false;
 
+  async function preloadImagesForAll() {
+    // collect unique (id,img) pairs from leaders, aCardsByType, bCards, cCards
+    const items = [];
+    const pushUnique = (id, img) => {
+      if (!id || !img) return;
+      if (!items.some(it => it.id === id)) items.push({ id, img });
+    };
+
+    leaders.forEach(l => pushUnique(l.id, l.img));
+    Object.values(aCardsByType).flat().forEach(c => pushUnique(c.id, c.img));
+    bCards.forEach(c => pushUnique(c.id, c.img));
+    cCards.forEach(c => pushUnique(c.id, c.img));
+
+    // show loading status
+    const statusEl = document.getElementById('loadingStatus');
+    statusEl.textContent = '正在預載圖片…';
+    // Preload with concurrency
+    await Promise.all(items.map(item => new Promise(resolve => {
+      const img = new Image();
+      img.onload = () => { imageCache[item.id] = img; resolve(); };
+      img.onerror = () => { imageCache[item.id] = null; resolve(); };
+      img.src = item.img;
+    })));
+    statusEl.textContent = '';
+    preloadDone = true;
+  }
+
+  // ---------------------------
+  // Helpers and data
+  // ---------------------------
   const MAX_BUDGET = 20;
   let usedBudget = 0;
 
@@ -177,13 +209,11 @@
     { key: 'tenacity', label: '堅韌 +1', cost: 1 }
   ];
 
-  // Helper to convert id to image filename in docs/images/
   function imgForId(id){
-    // produce lowercase, remove non-alphanum, replace underscores with hyphens for nicer filenames:
-     return `${id.toLowerCase()}.jpg`;
+    // adjust extension/name to match your repo (this example uses lowercase .jpg)
+    return `images/${id.toLowerCase()}.jpg`;
   }
 
-  // Leaders (6) - image set to relative path via imgForId
   const leaders = [
     { id:'L_D_A', name:'惡魔 領主 A', type:'demon', img: imgForId('L_D_A') },
     { id:'L_D_B', name:'惡魔 領主 B', type:'demon', img: imgForId('L_D_B') },
@@ -193,7 +223,6 @@
     { id:'L_N_B', name:'幽冥 領主 B', type:'nether', img: imgForId('L_N_B') }
   ];
 
-  // A-cards grouped by type: set img using id -> images/<id>.webp (lowercased + underscores->hyphens)
   const aCardsByType = {
     demon: [
       { id:'A_DE_1', name:'魔力使者', cost:2, maxCopies:3, img: imgForId('A_DE_1') },
@@ -214,13 +243,12 @@
     nether: [
       { id:'A_NT_1', name:'幽影獵手', cost:2, maxCopies:3, img: imgForId('A_NT_1') },
       { id:'A_NT_2', name:'冥火術士', cost:3, maxCopies:2, img: imgForId('A_NT_2') },
-      { id:'A_NT_3', name:'虛無行者', cost:4, maxCopies:1, img: imgForId('A_NT_3') },
+      { id:'A_NT_3', name:'���無行者', cost:4, maxCopies:1, img: imgForId('A_NT_3') },
       { id:'A_NT_4', name:'沉默守衛', cost:2, maxCopies:3, img: imgForId('A_NT_4') },
       { id:'A_NT_5', name:'幽冥博士', cost:1, maxCopies:5, img: imgForId('A_NT_5') }
     ]
   };
 
-  // B / C cards with relative image paths
   const bCards = [
     { id:'B_1', name:'戰術支援', cost:2, maxCopies:3, img: imgForId('B_1') },
     { id:'B_2', name:'補給運營', cost:1, maxCopies:4, img: imgForId('B_2') },
@@ -263,7 +291,9 @@
   remainingBudgetEl.textContent = MAX_BUDGET;
   selectedCountEl.textContent = 0;
 
-  /************************* RENDER (same logic) *************************/
+  // ---------------------------
+  // Rendering & logic (unchanged behavior)
+  // ---------------------------
   function renderLeaders(){
     leadersList.innerHTML = '';
     leaders.forEach(ld=>{
@@ -272,33 +302,23 @@
       el.dataset.id = ld.id;
       el.dataset.type = ld.type;
       el.tabIndex = 0;
-      el.innerHTML = `<img src="${ld.img}" alt="${ld.name}"><div class="label">${ld.name}</div>`;
+      const src = (imageCache[ld.id] && imageCache[ld.id].src) ? imageCache[ld.id].src : ld.img;
+      el.innerHTML = `<img src="${src}" alt="${ld.name}"><div class="label">${ld.name}</div>`;
       el.addEventListener('click', ()=> chooseLeader(ld.id));
       el.addEventListener('keydown', e => { if(e.key==='Enter' || e.key===' ') { e.preventDefault(); chooseLeader(ld.id);} });
       leadersList.appendChild(el);
     });
   }
 
-  function chooseLeader(id){
-    chosenLeaderId = id;
-    document.querySelectorAll('.leader').forEach(el => el.classList.toggle('selected', el.dataset.id === id));
-    campSelections.clear();
-    selectedOtherA.clear();
-    selectedCtypes.clear();
-    campSelections.add(id);
-    const leader = leaders.find(l=>l.id===id);
-    (aCardsByType[leader.type]||[]).forEach(card=>campSelections.add(card.id));
-    renderACards(); renderBCards(); renderCCards(); updateLimitHints();
-  }
-
   function makeCardCheckbox(card, checked=false, cls='', disabled=false, onToggle=null){
     const el = document.createElement('div');
     el.className = 'card-item';
-    const img = `<img src="${card.img}" alt="${card.name}">`;
+    const cached = imageCache[card.id];
+    const src = (cached && cached.src) ? cached.src : card.img;
     const cbId = `cb_${card.id}`;
     const disabledAttr = disabled ? 'disabled' : '';
     el.innerHTML = `
-      ${img}
+      <img src="${src}" alt="${card.name}">
       <div class="card-meta"><div class="small">${card.name}</div><div class="small">費:${card.cost} 上限:${card.maxCopies}</div></div>
       <div class="card-controls">
         <input data-card-id="${card.id}" data-card-type="${cls}" type="checkbox" id="${cbId}" ${checked?'checked':''} ${disabledAttr}>
@@ -325,8 +345,21 @@
       });
     });
   }
+
   function renderBCards(){ bCardsArea.innerHTML=''; bCards.forEach(card=> bCardsArea.appendChild(makeCardCheckbox(card, campSelections.has(card.id), 'b', false, ()=> toggleCampCard(card)))); }
   function renderCCards(){ cCardsArea.innerHTML=''; cCards.forEach(card=> cCardsArea.appendChild(makeCardCheckbox(card, campSelections.has(card.id), 'c', false, ()=> toggleCType(card)))); updateCCheckboxStates(); }
+
+  function chooseLeader(id){
+    chosenLeaderId = id;
+    document.querySelectorAll('.leader').forEach(el => el.classList.toggle('selected', el.dataset.id === id));
+    campSelections.clear();
+    selectedOtherA.clear();
+    selectedCtypes.clear();
+    campSelections.add(id);
+    const leader = leaders.find(l=>l.id===id);
+    (aCardsByType[leader.type]||[]).forEach(card=>campSelections.add(card.id));
+    renderACards(); renderBCards(); renderCCards(); updateLimitHints();
+  }
 
   function toggleCampCard(card){ campSelections.has(card.id) ? campSelections.delete(card.id) : campSelections.add(card.id); }
   function toggleOtherA(card){
@@ -348,7 +381,7 @@
   function updateLimitHints(){ aLimitHint.textContent = `已選擇其他 A 卡種類：${selectedOtherA.size} / 2（只能從未被自動加入的其他兩類 A 卡中選）`; cLimitHint.textContent = `已選擇 C 卡種類：${selectedCtypes.size} / 2`; }
   function resetCamp(){ chosenLeaderId=null; campSelections.clear(); selectedOtherA.clear(); selectedCtypes.clear(); renderACards(); renderBCards(); renderCCards(); document.querySelectorAll('.leader').forEach(el=>el.classList.remove('selected')); updateLimitHints(); }
 
-  /**************** Build camp -> lineup ****************/
+  // build camp cards
   function buildCampCardsFromSelections(){
     const cards = [];
     if(chosenLeaderId){ const leader = leaders.find(l=>l.id===chosenLeaderId); cards.push({ id: leader.id, name: leader.name, img: leader.img, cost:0, maxCopies:1, isLeader:true }); }
@@ -367,13 +400,14 @@
     usedBudget = 0; updateBudgetDisplay(); updateSelectedCount();
   }
 
-  /**************** Lineup UI & unit management ****************/
+  // lineup UI & unit management (unchanged behavior)
   function renderLineupGallery(){
     lineupGallery.innerHTML = '';
     if(!campCards.length){ lineupGallery.innerHTML = '<div class="hint">請先建立大本營 (Camp) 以加入先發卡池。</div>'; return; }
     campCards.forEach(card=>{
       const wrap = document.createElement('div'); wrap.className = 'sub-card'; wrap.dataset.cardId = card.id;
-      const img = document.createElement('img'); img.src = card.img; img.alt = card.name;
+      const cached = imageCache[card.id];
+      const imgEl = document.createElement('img'); imgEl.src = (cached && cached.src) ? cached.src : card.img; imgEl.alt = card.name;
       const name = document.createElement('div'); name.className='card-name'; name.textContent = card.name;
       const cost = document.createElement('div'); cost.className='card-cost'; cost.textContent = `費用：${card.cost}`;
       const maxEl = document.createElement('div'); maxEl.className='card-max'; maxEl.textContent = `上限：${card.maxCopies} 張`;
@@ -387,7 +421,7 @@
         btnMinus.addEventListener('click', ()=> attemptRemoveCard(card, countSpan));
         controls.appendChild(btnMinus); controls.appendChild(countSpan); controls.appendChild(btnPlus);
       }
-      wrap.appendChild(img); wrap.appendChild(name); wrap.appendChild(cost); wrap.appendChild(maxEl); wrap.appendChild(controls);
+      wrap.appendChild(imgEl); wrap.appendChild(name); wrap.appendChild(cost); wrap.appendChild(maxEl); wrap.appendChild(controls);
       lineupGallery.appendChild(wrap);
     });
     updatePlusButtonsState(); renderSelectedUnits();
@@ -430,8 +464,10 @@
     ordered.forEach(unit=>{
       const cardInfo = campCards.find(c=>c.id===unit.cardId) || { name: unit.cardName, img: '' };
       const el = document.createElement('div'); el.className = 'unit-card'; el.dataset.uid = unit.uid;
+      const cached = imageCache[cardInfo.id];
+      const src = (cached && cached.src) ? cached.src : cardInfo.img;
       el.innerHTML = `
-        <img src="${cardInfo.img || ''}" alt="${cardInfo.name}">
+        <img src="${src}" alt="${cardInfo.name}">
         <div style="display:flex;gap:8px;align-items:center;">
           <div style="flex:1;font-size:14px;font-weight:700">${cardInfo.name}</div>
         </div>
@@ -494,78 +530,19 @@
   function updateBudgetDisplay(){ const remaining = Math.max(0, MAX_BUDGET - usedBudget); remainingBudgetEl.textContent = remaining; remainingBudgetEl.className = 'value'; if(remaining === 0) remainingBudgetEl.classList.add('over'); }
   function updateSelectedCount(){ selectedCountEl.textContent = units.length; }
 
-  /**************** Tabs & actions *****************/
-  document.getElementById('tabCamp').addEventListener('click', ()=> { tabCamp.classList.add('active'); tabLineup.classList.remove('active'); campStage.style.display = ''; lineupStage.style.display = 'none'; });
-  document.getElementById('tabLineup').addEventListener('click', ()=> { tabLineup.classList.add('active'); tabCamp.classList.remove('active'); campStage.style.display = 'none'; lineupStage.style.display = ''; });
-
-  document.getElementById('enterLineupBtn').addEventListener('click', ()=> { if(!chosenLeaderId){ alert('請先選擇一位領主。'); return;} buildCampCardsFromSelections(); renderLineupGallery(); tabLineup.click(); });
-  document.getElementById('resetCampBtn').addEventListener('click', ()=> { if(!confirm('重置大本營會清除已選擇內容，確定嗎？')) return; resetCamp(); });
-  document.getElementById('backToCampBtn').addEventListener('click', ()=> { tabCamp.click(); });
-  document.getElementById('clearLineupBtn').addEventListener('click', ()=> { if(!confirm('重置先發將清除所有選擇數量與升級，確定嗎？')) return; const leaderUnit = units.find(u => u.isLeader); units.length = 0; if(leaderUnit) units.push(leaderUnit); lineupCounts.clear(); campCards.forEach(c => lineupCounts.set(c.id, c.isLeader ? 1 : 0)); usedBudget = 0; updateBudgetDisplay(); renderLineupGallery(); });
-
-  // Confirm -> show modal then export high-res image (relative images avoid CORS on GitHub Pages)
-  document.getElementById('confirmBtn').addEventListener('click', ()=> { openConfirmModal(); });
-
-  /**************** Utilities & high-res export ****************/
-  function resetCountsAndBudget(){ lineupCounts.clear(); units.length = 0; usedBudget = 0; updateBudgetDisplay(); updateSelectedCount(); }
-  function buildCampCardsFromSelections(){
-    const cards = [];
-    if(chosenLeaderId){ const leader = leaders.find(l=>l.id===chosenLeaderId); cards.push({ id: leader.id, name: leader.name, img: leader.img, cost:0, maxCopies:1, isLeader:true }); }
-    campSelections.forEach(id=>{
-      if(id === chosenLeaderId) return;
-      let found = null;
-      Object.values(aCardsByType).some(arr=>{ const c = arr.find(x=>x.id===id); if(c){ found=c; return true;} return false; });
-      if(!found) found = bCards.find(x=>x.id===id) || cCards.find(x=>x.id===id);
-      if(found) cards.push({ id: found.id, name: found.name, img: found.img, cost: found.cost, maxCopies: found.maxCopies, isLeader:false });
-    });
-    campCards = cards;
-    lineupCounts.clear();
-    campCards.forEach(c => lineupCounts.set(c.id, c.isLeader ? 1 : 0));
-    units.length = 0;
-    if(chosenLeaderId){ const leader = leaders.find(l=>l.id===chosenLeaderId); const uid = 'leader_' + (Date.now()); units.push({ uid, cardId: leader.id, cardName: leader.name, upgrades: new Set(), upgradesCost: 0, isLeader: true }); }
-    usedBudget = 0; updateBudgetDisplay(); updateSelectedCount();
-  }
-
-  function openConfirmModal(){
-    const backdrop = document.createElement('div'); backdrop.className = 'modal-backdrop';
-    const modal = document.createElement('div'); modal.className = 'modal';
-    modal.innerHTML = `
-      <h3>匯出先發陣容</h3>
-      <label>副牌組名稱：</label>
-      <input id="deckName" type="text" placeholder="輸入牌組名稱">
-      <label>戰術打法：</label>
-      <textarea id="deckTactics" rows="4" placeholder="輸入戰術說明"></textarea>
-      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;">
-        <button id="cancelExport" class="btn-ghost">取消</button>
-        <button id="doExport" class="btn-primary">匯出為高畫質圖片</button>
-      </div>
-      <div style="font-size:12px;margin-top:8px;color:#cfe8ff">備註：使用 repo 的相對路徑 images/，在 GitHub Pages 中 CORS 不會阻擋。</div>
-    `;
-    backdrop.appendChild(modal); document.body.appendChild(backdrop);
-    modal.querySelector('#cancelExport').addEventListener('click', ()=> document.body.removeChild(backdrop));
-    modal.querySelector('#doExport').addEventListener('click', async ()=> { const name = modal.querySelector('#deckName').value || '未命名牌組'; const tactics = modal.querySelector('#deckTactics').value || ''; await exportDeckAsImage(name, tactics); document.body.removeChild(backdrop); });
-  }
-
-  // High-res export: scale up canvas by scaleFactor (e.g., 2 or 3). Do NOT draw per-card cost in export (user requested).
+  // ---------------------------
+  // Export (use cached images and drawContain to preserve aspect ratio)
+  // ---------------------------
   async function exportDeckAsImage(deckName, tactics){
-    const scaleFactor = 2; // increase to 3 for even higher resolution if needed
+    const scaleFactor = 2; // increase for higher resolution
     const baseW = 1200;
     const padding = 24;
     const cardsPerRow = 6;
     const cardBoxH = 110;
     const headerH = 120;
     const smallText = 14;
-    // preload images (relative paths), no crossOrigin needed for same-origin GitHub Pages
-    const urlSet = new Map();
-    const push = (u)=>{ if(u && !urlSet.has(u)) urlSet.set(u, null); };
-    campCards.forEach(c=> push(c.img));
-    units.forEach(u=>{ const c = campCards.find(cc=>cc.id===u.cardId); if(c) push(c.img); });
-    const loadImage = (src) => new Promise(resolve => { const img = new Image(); img.onload = ()=> resolve(img); img.onerror = ()=> resolve(null); img.src = src; });
-    const loads = [];
-    urlSet.forEach((v,url)=> loads.push(loadImage(url).then(img=> urlSet.set(url,img))));
-    await Promise.all(loads);
 
-    // layout calculations
+    // layout
     const cardW = Math.floor((baseW - padding*2 - (cardsPerRow-1)*12)/cardsPerRow);
     const campRows = Math.ceil(campCards.length / cardsPerRow);
     const unitsPerRow = 4;
@@ -578,38 +555,34 @@
     const canvas = document.createElement('canvas');
     canvas.width = canvasW; canvas.height = canvasH;
     const ctx = canvas.getContext('2d');
-    ctx.scale(scaleFactor, scaleFactor); // draw at base coordinate system but high-res
+    ctx.scale(scaleFactor, scaleFactor);
 
-    // background
+    // background and header
     ctx.fillStyle = '#071018'; ctx.fillRect(0,0,baseW,canvasH/scaleFactor);
-
-    // title
     ctx.fillStyle = '#fff'; ctx.font = `700 28px sans-serif`; ctx.fillText(deckName, padding, padding + 28);
-
-    // tactics (wrapped)
     ctx.font = `${smallText}px sans-serif`; ctx.fillStyle = '#cfe8ff';
     const tacticsLines = wrapText(ctx, tactics, baseW - padding*2);
     tacticsLines.forEach((ln,i)=> ctx.fillText(ln, padding, padding + 28 + (i+1)*18));
-
-    // remaining + selected count
     const rem = Math.max(0, MAX_BUDGET - usedBudget);
     ctx.fillStyle = '#9ae6b4'; ctx.font = `600 14px sans-serif`;
-    ctx.fillText(`剩餘費用: ${rem}`, baseW - padding - 180, padding + 24);
-    ctx.fillText(`已選卡牌數量: ${units.length}`, baseW - padding - 180, padding + 44);
+    ctx.fillText(`剩餘費用: ${rem}`, baseW - padding - 220, padding + 24);
+    ctx.fillText(`已選卡牌數量: ${units.length}`, baseW - padding - 220, padding + 44);
 
-    // camp title
+    // camp title + grid
     let y = padding + headerH;
     ctx.fillStyle = '#cfe8ff'; ctx.font = `600 16px sans-serif`; ctx.fillText('大本營牌庫', padding, y - 10);
 
-    // draw camp cards grid (no cost text)
     let cx = padding; let cy = y + 12; let col = 0;
     campCards.forEach((c,i)=>{
-      const img = urlSet.get(c.img);
-      // box
+      const img = imageCache[c.id] || null;
       ctx.fillStyle = 'rgba(255,255,255,0.02)'; ctx.fillRect(cx, cy, cardW, 100);
-      if(img) drawImageCover(ctx, img, cx, cy, cardW, 70);
-      else { ctx.fillStyle = 'rgba(255,255,255,0.01)'; ctx.fillRect(cx, cy, cardW, 70); ctx.fillStyle = '#ccc'; ctx.font = `12px sans-serif`; ctx.fillText('圖示無法載入', cx + 8, cy + 36); }
-      // name only (NO cost)
+      // draw WITH preserved aspect ratio and fully inside the box (no cropping)
+      if(img){
+        drawImageContain(ctx, img, cx, cy, cardW, 70);
+      } else {
+        ctx.fillStyle = 'rgba(255,255,255,0.01)'; ctx.fillRect(cx, cy, cardW, 70);
+        ctx.fillStyle = '#ccc'; ctx.font = `12px sans-serif`; ctx.fillText('圖示無法載入', cx + 8, cy + 36);
+      }
       ctx.fillStyle = '#fff'; ctx.font = `600 12px sans-serif`; ctx.fillText(c.name, cx + 6, cy + 88);
       col++; cx += cardW + 12; if(col >= cardsPerRow){ col = 0; cx = padding; cy += cardBoxH; }
     });
@@ -618,17 +591,18 @@
     let unitsY = cy + 130;
     ctx.fillStyle = '#cfe8ff'; ctx.font = `600 16px sans-serif`; ctx.fillText('先發陣容與升級', padding, unitsY - 10);
 
-    // draw units with image + upgrades (no per-card cost)
     let ux = padding; let uy = unitsY + 12;
     units.forEach((u,i)=>{
       const card = campCards.find(c=>c.id===u.cardId) || { name:u.cardName, img: '' };
-      const img = urlSet.get(card.img);
-      // box
+      const img = imageCache[card.id] || null;
       ctx.fillStyle = 'rgba(255,255,255,0.02)'; ctx.fillRect(ux, uy, unitW, 180);
-      if(img) drawImageCover(ctx, img, ux, uy, unitW, 96); else { ctx.fillStyle='rgba(255,255,255,0.01)'; ctx.fillRect(ux,uy,unitW,96); ctx.fillStyle='#ccc'; ctx.font='12px sans-serif'; ctx.fillText('圖示無法載入', ux + 8, uy + 48); }
-      // name
+      if(img) {
+        drawImageContain(ctx, img, ux, uy, unitW, 96);
+      } else {
+        ctx.fillStyle='rgba(255,255,255,0.01)'; ctx.fillRect(ux,uy,unitW,96);
+        ctx.fillStyle='#ccc'; ctx.font='12px sans-serif'; ctx.fillText('圖示無法載入', ux + 8, uy + 48);
+      }
       ctx.fillStyle = '#fff'; ctx.font = `600 13px sans-serif`; ctx.fillText(card.name, ux + 8, uy + 116);
-      // upgrades list
       ctx.fillStyle = '#9ae6b4'; ctx.font = `500 12px sans-serif`;
       const ups = Array.from(u.upgrades).map(k=> (UPGRADES.find(x=>x.key===k) || {}).label ).filter(Boolean);
       const upText = ups.length ? ups.join(' / ') : '無';
@@ -637,7 +611,6 @@
       if((i+1) % 4 === 0){ ux = padding; uy += 200; }
     });
 
-    // finalize: convert to blob and download
     return new Promise((resolve)=>{
       canvas.toBlob(function(blob){
         const a = document.createElement('a');
@@ -651,7 +624,19 @@
     });
   }
 
-  // helpers (same as before)
+  // draw image contained (no cropping), centered to box
+  function drawImageContain(ctx, img, x, y, w, h){
+    if(!img) return;
+    const iw = img.width, ih = img.height;
+    const scale = Math.min(w/iw, h/ih);
+    const nw = iw * scale;
+    const nh = ih * scale;
+    const dx = x + (w - nw) / 2;
+    const dy = y + (h - nh) / 2;
+    try { ctx.drawImage(img, dx, dy, nw, nh); } catch(e){ ctx.fillStyle='rgba(255,255,255,0.02)'; ctx.fillRect(x,y,w,h); }
+  }
+
+  // helpers
   function wrapText(ctx, text, maxWidth){
     if(!text) return [];
     const words = text.split(/\s+/);
@@ -673,18 +658,61 @@
     }
     if(line) ctx.fillText(line, x, curY);
   }
-  function drawImageCover(ctx, img, x, y, w, h){
-    if(!img) return;
-    const iw = img.width, ih = img.height;
-    const r = Math.max(w/iw, h/ih);
-    const nw = iw * r, nh = ih * r;
-    const sx = (nw - w) / 2, sy = (nh - h) / 2;
-    try { ctx.drawImage(img, -sx + x, -sy + y, nw, nh); } catch(e){ ctx.fillStyle='rgba(255,255,255,0.02)'; ctx.fillRect(x,y,w,h); }
+
+  // ---------------------------
+  // Init: preload images then render UI
+  // ---------------------------
+  async function init(){
+    // disable UI interactions while preloading
+    document.getElementById('enterLineupBtn').disabled = true;
+    document.getElementById('confirmBtn').disabled = true;
+    document.getElementById('clearLineupBtn').disabled = true;
+    document.getElementById('resetCampBtn').disabled = true;
+
+    await preloadImagesForAll();
+
+    // now UI enabled
+    document.getElementById('enterLineupBtn').disabled = false;
+    document.getElementById('confirmBtn').disabled = false;
+    document.getElementById('clearLineupBtn').disabled = false;
+    document.getElementById('resetCampBtn').disabled = false;
+
+    // initial render
+    renderLeaders(); renderACards(); renderBCards(); renderCCards(); updateLimitHints();
   }
 
-  // initial render
-  renderLeaders(); renderACards(); renderBCards(); renderCCards(); updateLimitHints();
+  // wire events
+  document.getElementById('tabCamp').addEventListener('click', ()=> { tabCamp.classList.add('active'); tabLineup.classList.remove('active'); campStage.style.display = ''; lineupStage.style.display = 'none'; });
+  document.getElementById('tabLineup').addEventListener('click', ()=> { tabLineup.classList.add('active'); tabCamp.classList.remove('active'); campStage.style.display = 'none'; lineupStage.style.display = ''; });
+  document.getElementById('enterLineupBtn').addEventListener('click', ()=> { if(!chosenLeaderId){ alert('請先選擇一位領主。'); return;} buildCampCardsFromSelections(); renderLineupGallery(); tabLineup.click(); });
+  document.getElementById('resetCampBtn').addEventListener('click', ()=> { if(!confirm('重置大本營會清除已選擇內容，確定嗎？')) return; resetCamp(); });
+  document.getElementById('backToCampBtn').addEventListener('click', ()=> { tabCamp.click(); });
+  document.getElementById('clearLineupBtn').addEventListener('click', ()=> { if(!confirm('重置先發將清除所有選擇數量與升級，確定嗎？')) return; const leaderUnit = units.find(u => u.isLeader); units.length = 0; if(leaderUnit) units.push(leaderUnit); lineupCounts.clear(); campCards.forEach(c => lineupCounts.set(c.id, c.isLeader ? 1 : 0)); usedBudget = 0; updateBudgetDisplay(); renderLineupGallery(); });
+  document.getElementById('confirmBtn').addEventListener('click', ()=> { openConfirmModal(); });
+
+  // modal
+  function openConfirmModal(){
+    const backdrop = document.createElement('div'); backdrop.className = 'modal-backdrop';
+    const modal = document.createElement('div'); modal.className = 'modal';
+    modal.innerHTML = `
+      <h3>匯出先發陣容</h3>
+      <label>副牌組名稱：</label>
+      <input id="deckName" type="text" placeholder="輸入牌組名稱">
+      <label>戰術打法：</label>
+      <textarea id="deckTactics" rows="4" placeholder="輸入戰術說明"></textarea>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;">
+        <button id="cancelExport" class="btn-ghost">取消</button>
+        <button id="doExport" class="btn-primary">匯出為高畫質圖片</button>
+      </div>
+      <div style="font-size:12px;margin-top:8px;color:#cfe8ff">備註：使用 repo 的相對路徑 images/，在 GitHub Pages 中 CORS 不會阻擋。</div>
+    `;
+    backdrop.appendChild(modal); document.body.appendChild(backdrop);
+    modal.querySelector('#cancelExport').addEventListener('click', ()=> document.body.removeChild(backdrop));
+    modal.querySelector('#doExport').addEventListener('click', async ()=> { const name = modal.querySelector('#deckName').value || '未命名牌組'; const tactics = modal.querySelector('#deckTactics').value || ''; await exportDeckAsImage(name, tactics); document.body.removeChild(backdrop); });
+  }
+
+  // kickoff
+  init();
 </script>
 </body>
-
 </html>
