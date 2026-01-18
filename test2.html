@@ -135,14 +135,14 @@
       <div class="panel">
         <div class="section-title">選擇領主</div>
         <div class="leaders" id="leadersList"></div>
-        <div class="hint">選領主會自動把該類型的 A 卡加入大本營。可額外從其他兩類 A 卡中選 2 張。B 卡 3 張（任意）。C 卡最多選 2 種。大本營卡數（不含領主）需為 7~10 張。</div>
+        <div class="hint">選領主會自動把該類型的 A 卡加入大本營。可額外從其他兩類 A 卡中選 2 張。B 卡 3 張（任意）。C 卡最多選 2 種。最終確認先發時，已選擇的先發單位（包含領主）須為 7~10 張。</div>
       </div>
 
       <div style="height:12px;"></div>
 
       <div class="grid">
         <div class="col panel">
-          <div class="section-title">A ���（同領主類型自動加入 / 其他類型最多可選 2 張）</div>
+          <div class="section-title">A 卡（同領主類型自動加入 / 其他類型最多可選 2 張）</div>
           <div id="aCardsArea" class="card-list"></div>
           <div class="hint" id="aLimitHint"></div>
         </div>
@@ -169,7 +169,7 @@
     <div id="lineupStage" style="display:none;">
       <div class="panel">
         <div class="section-title">先發陣容 (from 大本營)</div>
-        <div id="lineupHint" class="hint">點 + 增加一個單位，並在下方為該單位選擇升級。領主會自動加入並可升級。</div>
+        <div id="lineupHint" class="hint">點 + 增加一個單位，並在下方為該單位選擇升級。領主會自動加入並可升級。確認先發時，已選單位（含領主）數量須為 7~10 張。</div>
         <div id="lineupGallery" class="sub-gallery"></div>
 
         <!-- Selected units area (shows chosen units bottom of page) -->
@@ -258,7 +258,7 @@
       { id:'A_DE_7', name:'地獄火焰', cost:3, maxCopies:1, img: imgForId('A_DE_7') },
       { id:'A_DE_8', name:'腐化先鋒', cost:3, maxCopies:1, img: imgForId('A_DE_8') },
       { id:'A_DE_9', name:'腐化先鋒', cost:3, maxCopies:1, img: imgForId('A_DE_9') },
-      { id:'A_DE_10', name:'腐化先���', cost:3, maxCopies:1, img: imgForId('A_DE_10') }
+      { id:'A_DE_10', name:'腐化先鋒', cost:3, maxCopies:1, img: imgForId('A_DE_10') }
     ],
     tomb: [
       { id:'A_TO_1', name:'墓園守衛', cost:3, maxCopies:3, img: imgForId('A_TO_1') },
@@ -385,10 +385,8 @@
     if(targetH > maxH){
       targetH = maxH;
       targetW = naturalW * (targetH / naturalH);
-      // ensure we don't exceed naturalW (already limited)
       if(targetW > naturalW) targetW = naturalW;
     }
-    // If naturalW smaller than rect.width, targetW could be smaller; we leave it (do not upscale).
     // center target position in viewport
     const targetLeft = Math.round((vw - targetW) / 2);
     const targetTop = Math.round((vh - targetH) / 2);
@@ -453,7 +451,7 @@
   }
 
   // ---------------------------
-  // Rendering & logic (same as before)...
+  // Rendering & logic
   // ---------------------------
   function renderLeaders(){
     leadersList.innerHTML = '';
@@ -887,15 +885,9 @@
   document.getElementById('tabCamp').addEventListener('click', ()=> { tabCamp.classList.add('active'); tabLineup.classList.remove('active'); campStage.style.display = ''; lineupStage.style.display = 'none'; });
   document.getElementById('tabLineup').addEventListener('click', ()=> { tabLineup.classList.add('active'); tabCamp.classList.remove('active'); campStage.style.display = 'none'; lineupStage.style.display = ''; });
 
-  // UPDATED: check card count rule (7~10 non-leader cards) before building camp->lineup
+  // ENTER LINEUP: build camp -> lineup (no final-count check here)
   document.getElementById('enterLineupBtn').addEventListener('click', ()=> {
     if(!chosenLeaderId){ alert('請先選擇一位領主。'); return; }
-    // count non-leader selections
-    const nonLeaderCount = Array.from(campSelections).filter(id => id !== chosenLeaderId).length;
-    if(nonLeaderCount < 7 || nonLeaderCount > 10){
-      showCountNotification(`大本營中「不含��主」的卡牌數量必須為 7 ~ 10 張。目前為 ${nonLeaderCount} 張。請調整後再進入先發。`);
-      return;
-    }
     buildCampCardsFromSelections();
     renderLineupGallery();
     tabLineup.click();
@@ -904,7 +896,16 @@
   document.getElementById('resetCampBtn').addEventListener('click', ()=> { if(!confirm('重置大本營會清除已選擇內容，確定嗎？')) return; resetCamp(); });
   document.getElementById('backToCampBtn').addEventListener('click', ()=> { tabCamp.click(); });
   document.getElementById('clearLineupBtn').addEventListener('click', ()=> { if(!confirm('重置先發將清除所有選擇數量與升級，確定嗎？')) return; const leaderUnit = units.find(u => u.isLeader); units.length = 0; if(leaderUnit) units.push(leaderUnit); lineupCounts.clear(); campCards.forEach(c => lineupCounts.set(c.id, c.isLeader ? 1 : 0)); usedBudget = 0; updateBudgetDisplay(); renderLineupGallery(); });
-  document.getElementById('confirmBtn').addEventListener('click', ()=> { openConfirmModal(); });
+
+  // CONFIRM: check selected units count (including leader) is 7~10 before opening confirm modal
+  document.getElementById('confirmBtn').addEventListener('click', ()=> {
+    const totalSelectedUnits = units.length; // includes leader if present
+    if(totalSelectedUnits < 7 || totalSelectedUnits > 10){
+      showCountNotification(`先發單位數量必須為 7 ~ 10 張（包含領主）。目前已選擇 ${totalSelectedUnits} 張。請調整後再確認。`);
+      return;
+    }
+    openConfirmModal();
+  });
 
   function openConfirmModal(){
     const backdrop = document.createElement('div'); backdrop.className = 'modal-backdrop';
