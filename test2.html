@@ -76,7 +76,7 @@
     @media (max-width:520px){ .card-item{width:100%;} .sub-card{width:calc(50% - 12px);} .leader{width:100%;} .unit-card{width:calc(50% - 12px);} }
     .flash{animation:flash 360ms ease;} @keyframes flash{0%{box-shadow:none;}40%{box-shadow:0 0 10px rgba(255,0,0,0.6);}100%{box-shadow:none;}}
 
-    /* ---------- Image zoom (lightbox) styles ---------- */
+    /* ---------- Image zoom (lightbox) styles (use left/top/width/height animation for sharpness) ---------- */
     .img-zoom-backdrop{
       position:fixed;
       inset:0;
@@ -93,13 +93,13 @@
     .img-zoom-clone{
       position:fixed;
       z-index:12001;
-      will-change:transform, width, height, left, top;
       border-radius:10px;
       box-shadow:0 30px 80px rgba(0,0,0,0.7);
-      transition:transform .34s cubic-bezier(.2,.9,.25,1), left .32s ease, top .32s ease, width .32s ease, height .32s ease;
+      transition:left .34s cubic-bezier(.2,.9,.25,1), top .34s cubic-bezier(.2,.9,.25,1), width .34s cubic-bezier(.2,.9,.25,1), height .34s cubic-bezier(.2,.9,.25,1);
       cursor:zoom-out;
       background:transparent;
       overflow:hidden;
+      will-change:left,top,width,height;
     }
     .img-zoom-clone img{ width:100%; height:100%; object-fit:contain; display:block; pointer-events:none; user-select:none; }
     body.img-zoom-open { touch-action: none; user-select: none; -webkit-user-select:none; }
@@ -135,14 +135,14 @@
       <div class="panel">
         <div class="section-title">選擇領主</div>
         <div class="leaders" id="leadersList"></div>
-        <div class="hint">選領主會自動把該類型的 A 卡加入大本營。可額外從其他兩類 A 卡中選 2 張。B 卡 3 張（任意）。C 卡最多選 2 種。</div>
+        <div class="hint">選領主會自動把該類型的 A 卡加入大本營。可額外從其他兩類 A 卡中選 2 張。B 卡 3 張（任意）。C 卡最多選 2 種。大本營卡數（不含領主）需為 7~10 張。</div>
       </div>
 
       <div style="height:12px;"></div>
 
       <div class="grid">
         <div class="col panel">
-          <div class="section-title">A 卡（同領主類型自動加入 / 其他類型最多可選 2 張）</div>
+          <div class="section-title">A ���（同領主類型自動加入 / 其他類型最多可選 2 張）</div>
           <div id="aCardsArea" class="card-list"></div>
           <div class="hint" id="aLimitHint"></div>
         </div>
@@ -258,7 +258,7 @@
       { id:'A_DE_7', name:'地獄火焰', cost:3, maxCopies:1, img: imgForId('A_DE_7') },
       { id:'A_DE_8', name:'腐化先鋒', cost:3, maxCopies:1, img: imgForId('A_DE_8') },
       { id:'A_DE_9', name:'腐化先鋒', cost:3, maxCopies:1, img: imgForId('A_DE_9') },
-      { id:'A_DE_10', name:'腐化先鋒', cost:3, maxCopies:1, img: imgForId('A_DE_10') }
+      { id:'A_DE_10', name:'腐化先���', cost:3, maxCopies:1, img: imgForId('A_DE_10') }
     ],
     tomb: [
       { id:'A_TO_1', name:'墓園守衛', cost:3, maxCopies:3, img: imgForId('A_TO_1') },
@@ -320,8 +320,18 @@
   selectedCountEl.textContent = 0;
 
   // ---------- Image zoom state ----------
-  let currentZoom = null; // { backdropEl, cloneEl, src, originalImgEl, rect }
+  let currentZoom = null; // { backdropEl, cloneEl, originalRect, originalImgEl }
   let escKeyListener = null;
+
+  // find imageCache entry by matching src
+  function findCacheEntryBySrc(src){
+    for(const id in imageCache){
+      const img = imageCache[id];
+      if(!img) continue;
+      if(img.src === src) return { id, img };
+    }
+    return null;
+  }
 
   function openImageZoomFromElement(imgEl){
     if(!imgEl) return;
@@ -333,6 +343,13 @@
     const vw = Math.max(document.documentElement.clientWidth, window.innerWidth || 0);
     const vh = Math.max(document.documentElement.clientHeight, window.innerHeight || 0);
 
+    // try to get full-size natural dimensions from imageCache if possible
+    const cacheEntry = findCacheEntryBySrc(src);
+    const naturalW = (cacheEntry && cacheEntry.img && cacheEntry.img.naturalWidth) ? cacheEntry.img.naturalWidth : (imgEl.naturalWidth || rect.width);
+    const naturalH = (cacheEntry && cacheEntry.img && cacheEntry.img.naturalHeight) ? cacheEntry.img.naturalHeight : (imgEl.naturalHeight || rect.height);
+    const highResSrc = (cacheEntry && cacheEntry.img && cacheEntry.img.src) ? cacheEntry.img.src : src;
+
+    // create backdrop & clone
     const backdrop = document.createElement('div');
     backdrop.className = 'img-zoom-backdrop';
     backdrop.setAttribute('role','dialog');
@@ -341,35 +358,48 @@
 
     const clone = document.createElement('div');
     clone.className = 'img-zoom-clone';
+    // initial geometry: same as source rect (viewport coordinates)
     clone.style.left = rect.left + 'px';
     clone.style.top = rect.top + 'px';
     clone.style.width = rect.width + 'px';
     clone.style.height = rect.height + 'px';
 
+    // inner high-res image
     const inner = document.createElement('img');
     inner.alt = imgEl.alt || '';
-    inner.src = src;
+    inner.src = highResSrc;
     clone.appendChild(inner);
 
     document.body.appendChild(backdrop);
     document.body.appendChild(clone);
     document.body.classList.add('img-zoom-open');
+    // prevent body scrolling while open
     document.body.style.overflow = 'hidden';
 
+    // compute target size while preserving aspect ratio, but do NOT upscale beyond natural size
+    const maxW = vw * 0.96; // leave small margin
+    const maxH = vh * 0.94;
+    // start with natural size bounded by maxW/maxH
+    let targetW = Math.min(naturalW, maxW);
+    let targetH = naturalH * (targetW / naturalW);
+    if(targetH > maxH){
+      targetH = maxH;
+      targetW = naturalW * (targetH / naturalH);
+      // ensure we don't exceed naturalW (already limited)
+      if(targetW > naturalW) targetW = naturalW;
+    }
+    // If naturalW smaller than rect.width, targetW could be smaller; we leave it (do not upscale).
+    // center target position in viewport
+    const targetLeft = Math.round((vw - targetW) / 2);
+    const targetTop = Math.round((vh - targetH) / 2);
+
+    // animate (use left/top/width/height transitions for sharpness)
     requestAnimationFrame(()=>{
       backdrop.classList.add('show');
-      // Make zoom larger (closer to fullscreen) but leave some margins
-      const maxW = vw * 0.96; // 96% width
-      const maxH = vh * 0.94; // 94% height
-      const scale = Math.min(maxW / rect.width, maxH / rect.height);
-      const targetCenterX = vw / 2;
-      const targetCenterY = vh / 2;
-      const currentCenterX = rect.left + rect.width / 2;
-      const currentCenterY = rect.top + rect.height / 2;
-      const translateX = targetCenterX - currentCenterX;
-      const translateY = targetCenterY - currentCenterY;
-      clone.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
-      clone.style.transformOrigin = 'center center';
+      clone.style.left = targetLeft + 'px';
+      clone.style.top = targetTop + 'px';
+      clone.style.width = Math.round(targetW) + 'px';
+      clone.style.height = Math.round(targetH) + 'px';
     });
 
     function backdropClick(e){
@@ -381,13 +411,20 @@
     escKeyListener = (ev) => { if(ev.key === 'Escape') closeImageZoom(); };
     document.addEventListener('keydown', escKeyListener);
 
-    currentZoom = { backdropEl: backdrop, cloneEl: clone, originalImgEl: imgEl };
+    currentZoom = { backdropEl: backdrop, cloneEl: clone, originalRect: rect, originalImgEl: imgEl };
   }
 
   function closeImageZoom(){
     if(!currentZoom) return;
-    const { backdropEl, cloneEl, originalImgEl } = currentZoom;
-    cloneEl.style.transform = '';
+    const { backdropEl, cloneEl, originalRect } = currentZoom;
+    // animate back to original rect
+    cloneEl.style.left = originalRect.left + 'px';
+    cloneEl.style.top = originalRect.top + 'px';
+    cloneEl.style.width = originalRect.width + 'px';
+    cloneEl.style.height = originalRect.height + 'px';
+
+    backdropEl.classList.remove('show');
+
     const cleanup = ()=>{
       if(backdropEl && backdropEl.parentNode) backdropEl.parentNode.removeChild(backdropEl);
       if(cloneEl && cloneEl.parentNode) cloneEl.parentNode.removeChild(cloneEl);
@@ -396,8 +433,8 @@
       if(escKeyListener) document.removeEventListener('keydown', escKeyListener);
       currentZoom = null;
     };
-    backdropEl.classList.remove('show');
-    const t = setTimeout(cleanup, 380);
+
+    const t = setTimeout(cleanup, 420);
     cloneEl.addEventListener('transitionend', function te(){
       clearTimeout(t);
       cloneEl.removeEventListener('transitionend', te);
@@ -416,7 +453,7 @@
   }
 
   // ---------------------------
-  // Rendering & logic
+  // Rendering & logic (same as before)...
   // ---------------------------
   function renderLeaders(){
     leadersList.innerHTML = '';
@@ -427,7 +464,7 @@
       el.dataset.type = ld.type;
       el.tabIndex = 0;
       const src = (imageCache[ld.id] && imageCache[ld.id].src) ? imageCache[ld.id].src : ld.img;
-      // NOTE: leaders are NOT zoomable per request -> do not call makeImgZoomable here
+      // leaders are NOT zoomable per request
       el.innerHTML = `<img src="${src}" alt="${ld.name}"><div class="label">${ld.name}</div>`;
       el.addEventListener('click', ()=> chooseLeader(ld.id));
       el.addEventListener('keydown', e => { if(e.key==='Enter' || e.key===' ') { e.preventDefault(); chooseLeader(ld.id);} });
@@ -526,7 +563,7 @@
     usedBudget = 0; updateBudgetDisplay(); updateSelectedCount();
   }
 
-  // lineup UI & unit management code
+  // lineup UI & unit management code (same as before)...
   function renderLineupGallery(){
     lineupGallery.innerHTML = '';
     if(!campCards.length){ lineupGallery.innerHTML = '<div class="hint">請先建立大本營 (Camp) 以加入先發卡池。</div>'; return; }
@@ -671,16 +708,17 @@
     const padding = 24;
     const cardsPerRow = 6;
 
-    const cardImageW =  (Math.floor((baseW - padding*2 - (cardsPerRow-1)*12)/cardsPerRow));
-    const cardImageH = 90;
-    const labelH = 20;
-    const cardBoxH = cardImageH + labelH + 6;
+    // fixed image box sizes (same for every small card)
+    const cardImageW =  (Math.floor((baseW - padding*2 - (cardsPerRow-1)*12)/cardsPerRow)); // width of card box
+    const cardImageH = 90; // height reserved for the image area (keeps uniform size)
+    const labelH = 20; // label area under image
+    const cardBoxH = cardImageH + labelH + 6; // total row height per card (consistent)
 
     const campRows = Math.ceil(campCards.length / cardsPerRow);
     const unitsPerRow = 4;
     const unitImageW = Math.floor((baseW - padding*2 - (unitsPerRow-1)*12)/unitsPerRow);
-    const unitImageH = 110;
-    const unitBoxH = unitImageH + labelH + 14;
+    const unitImageH = 110; // fixed unit image H
+    const unitBoxH = unitImageH + labelH + 14; // total unit box height
 
     const unitRows = Math.max(1, Math.ceil(units.length / unitsPerRow));
     const headerH = 120;
@@ -693,6 +731,7 @@
     const ctx = canvas.getContext('2d');
     ctx.scale(scaleFactor, scaleFactor);
 
+    // background & header
     ctx.fillStyle = '#071018'; ctx.fillRect(0,0,baseW,canvasH/scaleFactor);
     ctx.fillStyle = '#fff'; ctx.font = `700 28px sans-serif`; ctx.fillText(deckName, padding, padding + 28);
     ctx.font = `14px sans-serif`; ctx.fillStyle = '#cfe8ff';
@@ -703,14 +742,19 @@
     ctx.fillText(`剩餘費用: ${rem}`, baseW - padding - 220, padding + 24);
     ctx.fillText(`已選卡牌數量: ${units.length}`, baseW - padding - 220, padding + 44);
 
+    // camp title
     let y = padding + headerH;
     ctx.fillStyle = '#cfe8ff'; ctx.font = `600 16px sans-serif`; ctx.fillText('大本營牌庫', padding, y - 10);
 
+    // draw camp grid: each card uses fixed image box (cardImageW x cardImageH) and we CENTER and CONTAIN the original image into that box.
     let cx = padding; let cy = y + 12; let col = 0;
     campCards.forEach((c,i)=>{
       const img = imageCache[c.id] || null;
+      // card background
       ctx.fillStyle = 'rgba(255,255,255,0.02)'; ctx.fillRect(cx, cy, cardImageW, cardBoxH - 6);
+      // draw contained image centered inside (no cropping)
       if(img){
+        // clip to the image box area to ensure no overflow (defensive)
         ctx.save();
         ctx.beginPath();
         ctx.rect(cx, cy, cardImageW, cardImageH);
@@ -721,10 +765,12 @@
         ctx.fillStyle = 'rgba(255,255,255,0.01)'; ctx.fillRect(cx, cy, cardImageW, cardImageH);
         ctx.fillStyle = '#ccc'; ctx.font = `12px sans-serif`; ctx.fillText('圖示無法載入', cx + 8, cy + (cardImageH/2));
       }
+      // name under image in reserved label area
       ctx.fillStyle = '#fff'; ctx.font = `600 12px sans-serif`; ctx.fillText(c.name, cx + 6, cy + cardImageH + 14);
       col++; cx += cardImageW + 12; if(col >= cardsPerRow){ col = 0; cx = padding; cy += cardBoxH; }
     });
 
+    // units section
     let unitsY = cy + 130;
     ctx.fillStyle = '#cfe8ff'; ctx.font = `600 16px sans-serif`; ctx.fillText('先發陣容與升級', padding, unitsY - 10);
 
@@ -766,6 +812,7 @@
     });
   }
 
+  // drawImageContain: draw image fully inside box, preserve original aspect ratio; image is centered, not cropped
   function drawImageContain(ctx, img, x, y, w, h){
     if(!img) return;
     const iw = img.width || 1, ih = img.height || 1;
@@ -777,6 +824,7 @@
     try { ctx.drawImage(img, dx, dy, nw, nh); } catch(e){ ctx.fillStyle='rgba(255,255,255,0.02)'; ctx.fillRect(x,y,w,h); }
   }
 
+  // helpers
   function wrapText(ctx, text, maxWidth){
     if(!text) return [];
     const words = text.split(/\s+/);
@@ -799,7 +847,27 @@
     if(line) ctx.fillText(line, x, curY);
   }
 
-  // Init and event wiring
+  // ---------------------------
+  // Notification modal for card count rule
+  // ---------------------------
+  function showCountNotification(message){
+    const backdrop = document.createElement('div'); backdrop.className = 'modal-backdrop';
+    const modal = document.createElement('div'); modal.className = 'modal';
+    modal.innerHTML = `
+      <h3>卡牌數量不符規定</h3>
+      <div style="color:#cfe8ff;margin-top:8px">${message}</div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;">
+        <button id="okCountNotify" class="btn-primary">好</button>
+      </div>
+    `;
+    backdrop.appendChild(modal);
+    document.body.appendChild(backdrop);
+    modal.querySelector('#okCountNotify').addEventListener('click', ()=> {
+      document.body.removeChild(backdrop);
+    });
+  }
+
+  // Init and event wiring (same as previous)
   async function init(){
     document.getElementById('enterLineupBtn').disabled = true;
     document.getElementById('confirmBtn').disabled = true;
@@ -818,7 +886,21 @@
 
   document.getElementById('tabCamp').addEventListener('click', ()=> { tabCamp.classList.add('active'); tabLineup.classList.remove('active'); campStage.style.display = ''; lineupStage.style.display = 'none'; });
   document.getElementById('tabLineup').addEventListener('click', ()=> { tabLineup.classList.add('active'); tabCamp.classList.remove('active'); campStage.style.display = 'none'; lineupStage.style.display = ''; });
-  document.getElementById('enterLineupBtn').addEventListener('click', ()=> { if(!chosenLeaderId){ alert('請先選擇一位領主。'); return;} buildCampCardsFromSelections(); renderLineupGallery(); tabLineup.click(); });
+
+  // UPDATED: check card count rule (7~10 non-leader cards) before building camp->lineup
+  document.getElementById('enterLineupBtn').addEventListener('click', ()=> {
+    if(!chosenLeaderId){ alert('請先選擇一位領主。'); return; }
+    // count non-leader selections
+    const nonLeaderCount = Array.from(campSelections).filter(id => id !== chosenLeaderId).length;
+    if(nonLeaderCount < 7 || nonLeaderCount > 10){
+      showCountNotification(`大本營中「不含��主」的卡牌數量必須為 7 ~ 10 張。目前為 ${nonLeaderCount} 張。請調整後再進入先發。`);
+      return;
+    }
+    buildCampCardsFromSelections();
+    renderLineupGallery();
+    tabLineup.click();
+  });
+
   document.getElementById('resetCampBtn').addEventListener('click', ()=> { if(!confirm('重置大本營會清除已選擇內容，確定嗎？')) return; resetCamp(); });
   document.getElementById('backToCampBtn').addEventListener('click', ()=> { tabCamp.click(); });
   document.getElementById('clearLineupBtn').addEventListener('click', ()=> { if(!confirm('重置先發將清除所有選擇數量與升級，確定嗎？')) return; const leaderUnit = units.find(u => u.isLeader); units.length = 0; if(leaderUnit) units.push(leaderUnit); lineupCounts.clear(); campCards.forEach(c => lineupCounts.set(c.id, c.isLeader ? 1 : 0)); usedBudget = 0; updateBudgetDisplay(); renderLineupGallery(); });
