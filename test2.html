@@ -80,7 +80,7 @@
     .img-zoom-backdrop{
       position:fixed;
       inset:0;
-      background:rgba(0,0,0,0.65);
+      background:rgba(0,0,0,0.75);
       z-index:12000;
       display:flex;
       align-items:center;
@@ -94,16 +94,14 @@
       position:fixed;
       z-index:12001;
       will-change:transform, width, height, left, top;
-      border-radius:8px;
-      box-shadow:0 20px 60px rgba(0,0,0,0.6);
-      transition:transform .32s cubic-bezier(.2,.9,.25,1), left .32s ease, top .32s ease, width .32s ease, height .32s ease;
+      border-radius:10px;
+      box-shadow:0 30px 80px rgba(0,0,0,0.7);
+      transition:transform .34s cubic-bezier(.2,.9,.25,1), left .32s ease, top .32s ease, width .32s ease, height .32s ease;
       cursor:zoom-out;
       background:transparent;
       overflow:hidden;
     }
-    /* optional image styling inside clone */
     .img-zoom-clone img{ width:100%; height:100%; object-fit:contain; display:block; pointer-events:none; user-select:none; }
-    /* disable text selection while zoom open */
     body.img-zoom-open { touch-action: none; user-select: none; -webkit-user-select:none; }
   </style>
 </head>
@@ -211,7 +209,7 @@
     cCards.forEach(c => pushUnique(c.id, c.img));
 
     const statusEl = document.getElementById('loadingStatus');
-    statusEl.textContent = '正在預��圖片…';
+    statusEl.textContent = '正在預載圖片…';
     await Promise.all(items.map(item => new Promise(resolve => {
       const img = new Image();
       img.onload = () => { imageCache[item.id] = img; resolve(); };
@@ -329,72 +327,57 @@
     if(!imgEl) return;
     const src = imgEl.src || imgEl.getAttribute('src');
     if(!src) return;
-    // if already zoomed, close
     if(currentZoom) { closeImageZoom(); return; }
 
-    // compute source rect
     const rect = imgEl.getBoundingClientRect();
     const vw = Math.max(document.documentElement.clientWidth, window.innerWidth || 0);
     const vh = Math.max(document.documentElement.clientHeight, window.innerHeight || 0);
 
-    // create backdrop
     const backdrop = document.createElement('div');
     backdrop.className = 'img-zoom-backdrop';
     backdrop.setAttribute('role','dialog');
     backdrop.setAttribute('aria-modal','true');
     backdrop.tabIndex = -1;
 
-    // create clone
     const clone = document.createElement('div');
     clone.className = 'img-zoom-clone';
-    // set initial position/size same as source
     clone.style.left = rect.left + 'px';
     clone.style.top = rect.top + 'px';
     clone.style.width = rect.width + 'px';
     clone.style.height = rect.height + 'px';
-    // put image inside
+
     const inner = document.createElement('img');
     inner.alt = imgEl.alt || '';
-    // prefer cached full src if exists in imageCache (imgEl might be using cached.src already)
     inner.src = src;
     clone.appendChild(inner);
 
-    // append to body
     document.body.appendChild(backdrop);
     document.body.appendChild(clone);
-    // prevent scrolling
     document.body.classList.add('img-zoom-open');
     document.body.style.overflow = 'hidden';
 
-    // after paint, animate to center & scaled
     requestAnimationFrame(()=>{
       backdrop.classList.add('show');
-      // compute target available size (padding 8% each side)
-      const maxW = vw * 0.92;
-      const maxH = vh * 0.88;
-      const scale = Math.min(maxW / rect.width, maxH / rect.height, 1.8); // limit max scale
-      // center position:
+      // Make zoom larger (closer to fullscreen) but leave some margins
+      const maxW = vw * 0.96; // 96% width
+      const maxH = vh * 0.94; // 94% height
+      const scale = Math.min(maxW / rect.width, maxH / rect.height);
       const targetCenterX = vw / 2;
       const targetCenterY = vh / 2;
       const currentCenterX = rect.left + rect.width / 2;
       const currentCenterY = rect.top + rect.height / 2;
       const translateX = targetCenterX - currentCenterX;
       const translateY = targetCenterY - currentCenterY;
-      // instead of changing left/top, animate transform for smoothness
       clone.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
       clone.style.transformOrigin = 'center center';
-      // optionally increase border-radius -> 8px remains
     });
 
-    // close handlers
     function backdropClick(e){
-      // if click occurs on backdrop (outside clone), close
       if(e.target === backdrop) closeImageZoom();
     }
     backdrop.addEventListener('click', backdropClick);
     clone.addEventListener('click', closeImageZoom);
 
-    // Esc key
     escKeyListener = (ev) => { if(ev.key === 'Escape') closeImageZoom(); };
     document.addEventListener('keydown', escKeyListener);
 
@@ -404,9 +387,7 @@
   function closeImageZoom(){
     if(!currentZoom) return;
     const { backdropEl, cloneEl, originalImgEl } = currentZoom;
-    // reverse animation: remove transform -> clone is positioned at same left/top/width/height so transform removal animates back
     cloneEl.style.transform = '';
-    // when animation finishes, remove elements
     const cleanup = ()=>{
       if(backdropEl && backdropEl.parentNode) backdropEl.parentNode.removeChild(backdropEl);
       if(cloneEl && cloneEl.parentNode) cloneEl.parentNode.removeChild(cloneEl);
@@ -415,10 +396,8 @@
       if(escKeyListener) document.removeEventListener('keydown', escKeyListener);
       currentZoom = null;
     };
-    // hide backdrop immediately so opacity animates
     backdropEl.classList.remove('show');
-    // wait for transition end on clone (use setTimeout fallback)
-    const t = setTimeout(cleanup, 360);
+    const t = setTimeout(cleanup, 380);
     cloneEl.addEventListener('transitionend', function te(){
       clearTimeout(t);
       cloneEl.removeEventListener('transitionend', te);
@@ -426,7 +405,7 @@
     });
   }
 
-  // Helper: add zoom handler to an <img> element
+  // Helper: add zoom handler to an <img> element (only for A/B/C cards and non-leader units)
   function makeImgZoomable(imgEl){
     if(!imgEl) return;
     imgEl.style.cursor = 'zoom-in';
@@ -437,7 +416,7 @@
   }
 
   // ---------------------------
-  // Rendering & logic (same as before)...
+  // Rendering & logic
   // ---------------------------
   function renderLeaders(){
     leadersList.innerHTML = '';
@@ -448,9 +427,8 @@
       el.dataset.type = ld.type;
       el.tabIndex = 0;
       const src = (imageCache[ld.id] && imageCache[ld.id].src) ? imageCache[ld.id].src : ld.img;
+      // NOTE: leaders are NOT zoomable per request -> do not call makeImgZoomable here
       el.innerHTML = `<img src="${src}" alt="${ld.name}"><div class="label">${ld.name}</div>`;
-      // make image zoomable
-      makeImgZoomable(el.querySelector('img'));
       el.addEventListener('click', ()=> chooseLeader(ld.id));
       el.addEventListener('keydown', e => { if(e.key==='Enter' || e.key===' ') { e.preventDefault(); chooseLeader(ld.id);} });
       leadersList.appendChild(el);
@@ -472,7 +450,7 @@
         <label for="${cbId}" style="margin-left:6px;color:#cfe8ff">${disabled? '自動加入' : '加入大本營'}</label>
       </div>
     `;
-    // make image zoomable
+    // Only A/B/C cards reach here (leaders handled separately), so it's OK to make zoomable
     makeImgZoomable(el.querySelector('img'));
     if(!disabled && onToggle){
       const checkbox = el.querySelector('input[type=checkbox]');
@@ -548,7 +526,7 @@
     usedBudget = 0; updateBudgetDisplay(); updateSelectedCount();
   }
 
-  // lineup UI & unit management code (same as before)...
+  // lineup UI & unit management code
   function renderLineupGallery(){
     lineupGallery.innerHTML = '';
     if(!campCards.length){ lineupGallery.innerHTML = '<div class="hint">請先建立大本營 (Camp) 以加入先發卡池。</div>'; return; }
@@ -556,8 +534,8 @@
       const wrap = document.createElement('div'); wrap.className = 'sub-card'; wrap.dataset.cardId = card.id;
       const cached = imageCache[card.id];
       const imgEl = document.createElement('img'); imgEl.src = (cached && cached.src) ? cached.src : card.img; imgEl.alt = card.name;
-      // zoomable
-      makeImgZoomable(imgEl);
+      // Only make zoomable when NOT leader
+      if(!card.isLeader) makeImgZoomable(imgEl);
 
       const name = document.createElement('div'); name.className='card-name'; name.textContent = card.name;
       const cost = document.createElement('div'); cost.className='card-cost'; cost.textContent = `費用：${card.cost}`;
@@ -626,8 +604,8 @@
         <div class="upgrades"></div>
         <div class="unit-actions"></div>
       `;
-      // make zoomable
-      makeImgZoomable(el.querySelector('img'));
+      // Only non-leader unit images zoomable
+      if(!unit.isLeader) makeImgZoomable(el.querySelector('img'));
 
       const upgradesContainer = el.querySelector('.upgrades');
       UPGRADES.forEach(up=>{
@@ -693,17 +671,16 @@
     const padding = 24;
     const cardsPerRow = 6;
 
-    // fixed image box sizes (same for every small card)
-    const cardImageW =  (Math.floor((baseW - padding*2 - (cardsPerRow-1)*12)/cardsPerRow)); // width of card box
-    const cardImageH = 90; // height reserved for the image area (keeps uniform size)
-    const labelH = 20; // label area under image
-    const cardBoxH = cardImageH + labelH + 6; // total row height per card (consistent)
+    const cardImageW =  (Math.floor((baseW - padding*2 - (cardsPerRow-1)*12)/cardsPerRow));
+    const cardImageH = 90;
+    const labelH = 20;
+    const cardBoxH = cardImageH + labelH + 6;
 
     const campRows = Math.ceil(campCards.length / cardsPerRow);
     const unitsPerRow = 4;
     const unitImageW = Math.floor((baseW - padding*2 - (unitsPerRow-1)*12)/unitsPerRow);
-    const unitImageH = 110; // fixed unit image H
-    const unitBoxH = unitImageH + labelH + 14; // total unit box height
+    const unitImageH = 110;
+    const unitBoxH = unitImageH + labelH + 14;
 
     const unitRows = Math.max(1, Math.ceil(units.length / unitsPerRow));
     const headerH = 120;
@@ -716,7 +693,6 @@
     const ctx = canvas.getContext('2d');
     ctx.scale(scaleFactor, scaleFactor);
 
-    // background & header
     ctx.fillStyle = '#071018'; ctx.fillRect(0,0,baseW,canvasH/scaleFactor);
     ctx.fillStyle = '#fff'; ctx.font = `700 28px sans-serif`; ctx.fillText(deckName, padding, padding + 28);
     ctx.font = `14px sans-serif`; ctx.fillStyle = '#cfe8ff';
@@ -727,19 +703,14 @@
     ctx.fillText(`剩餘費用: ${rem}`, baseW - padding - 220, padding + 24);
     ctx.fillText(`已選卡牌數量: ${units.length}`, baseW - padding - 220, padding + 44);
 
-    // camp title
     let y = padding + headerH;
     ctx.fillStyle = '#cfe8ff'; ctx.font = `600 16px sans-serif`; ctx.fillText('大本營牌庫', padding, y - 10);
 
-    // draw camp grid: each card uses fixed image box (cardImageW x cardImageH) and we CENTER and CONTAIN the original image into that box.
     let cx = padding; let cy = y + 12; let col = 0;
     campCards.forEach((c,i)=>{
       const img = imageCache[c.id] || null;
-      // card background
       ctx.fillStyle = 'rgba(255,255,255,0.02)'; ctx.fillRect(cx, cy, cardImageW, cardBoxH - 6);
-      // draw contained image centered inside (no cropping)
       if(img){
-        // clip to the image box area to ensure no overflow (defensive)
         ctx.save();
         ctx.beginPath();
         ctx.rect(cx, cy, cardImageW, cardImageH);
@@ -750,12 +721,10 @@
         ctx.fillStyle = 'rgba(255,255,255,0.01)'; ctx.fillRect(cx, cy, cardImageW, cardImageH);
         ctx.fillStyle = '#ccc'; ctx.font = `12px sans-serif`; ctx.fillText('圖示無法載入', cx + 8, cy + (cardImageH/2));
       }
-      // name under image in reserved label area
       ctx.fillStyle = '#fff'; ctx.font = `600 12px sans-serif`; ctx.fillText(c.name, cx + 6, cy + cardImageH + 14);
       col++; cx += cardImageW + 12; if(col >= cardsPerRow){ col = 0; cx = padding; cy += cardBoxH; }
     });
 
-    // units section
     let unitsY = cy + 130;
     ctx.fillStyle = '#cfe8ff'; ctx.font = `600 16px sans-serif`; ctx.fillText('先發陣容與升級', padding, unitsY - 10);
 
@@ -797,7 +766,6 @@
     });
   }
 
-  // drawImageContain: draw image fully inside box, preserve original aspect ratio; image is centered, not cropped
   function drawImageContain(ctx, img, x, y, w, h){
     if(!img) return;
     const iw = img.width || 1, ih = img.height || 1;
@@ -809,7 +777,6 @@
     try { ctx.drawImage(img, dx, dy, nw, nh); } catch(e){ ctx.fillStyle='rgba(255,255,255,0.02)'; ctx.fillRect(x,y,w,h); }
   }
 
-  // helpers
   function wrapText(ctx, text, maxWidth){
     if(!text) return [];
     const words = text.split(/\s+/);
@@ -832,7 +799,7 @@
     if(line) ctx.fillText(line, x, curY);
   }
 
-  // Init and event wiring (same as previous)
+  // Init and event wiring
   async function init(){
     document.getElementById('enterLineupBtn').disabled = true;
     document.getElementById('confirmBtn').disabled = true;
