@@ -221,20 +221,24 @@
 
   const aCardsByType = {
     demon: [
-      { id:'A_DE_1', name:'魔力使者', cost:2, maxCopies:3, img: imgForId('A_DE_1') },
-      { id:'A_DE_2', name:'暗影勇士', cost:3, maxCopies:2, img: imgForId('A_DE_2') },
-      { id:'A_DE_3', name:'淵能術者', cost:4, maxCopies:1, img: imgForId('A_DE_3') },
-      { id:'A_DE_4', name:'饕餮喚靈', cost:3, maxCopies:2, img: imgForId('A_DE_4') },
-      { id:'A_DE_5', name:'惡靈騎士', cost:2, maxCopies:3, img: imgForId('A_DE_5') },
-      { id:'A_DE_6', name:'腐化先鋒', cost:1, maxCopies:4, img: imgForId('A_DE_6') }
+      { id:'A_DE_1', name:'魔力使者', cost:8, maxCopies:2, img: imgForId('A_DE_1') },
+      { id:'A_DE_2', name:'暗影勇士', cost:6, maxCopies:2, img: imgForId('A_DE_2') },
+      { id:'A_DE_3', name:'淵能術者', cost:3, maxCopies:2, img: imgForId('A_DE_3') },
+      { id:'A_DE_4', name:'饕餮喚靈', cost:1, maxCopies:3, img: imgForId('A_DE_4') },
+      { id:'A_DE_5', name:'惡靈騎士', cost:4, maxCopies:3, img: imgForId('A_DE_5') },
+      { id:'A_DE_6', name:'腐化先鋒', cost:3, maxCopies:1, img: imgForId('A_DE_6') },
+      { id:'A_DE_7', name:'地獄火焰', cost:3, maxCopies:1, img: imgForId('A_DE_7') },
+      { id:'A_DE_8', name:'腐化先鋒', cost:3, maxCopies:1, img: imgForId('A_DE_8') },
+      { id:'A_DE_9', name:'腐化先鋒', cost:3, maxCopies:1, img: imgForId('A_DE_9') },
+      { id:'A_DE_10', name:'腐化先鋒', cost:3, maxCopies:1, img: imgForId('A_DE_10') }
     ],
     tomb: [
-      { id:'A_TO_1', name:'墓園守衛', cost:2, maxCopies:4, img: imgForId('A_TO_1') },
-      { id:'A_TO_2', name:'骷髏領主', cost:4, maxCopies:1, img: imgForId('A_TO_2') },
-      { id:'A_TO_3', name:'腐骨弓手', cost:2, maxCopies:3, img: imgForId('A_TO_3') },
-      { id:'A_TO_4', name:'陵衛戰士', cost:3, maxCopies:2, img: imgForId('A_TO_4') },
-      { id:'A_TO_5', name:'古殿祭者', cost:1, maxCopies:6, img: imgForId('A_TO_5') },
-      { id:'A_TO_6', name:'石棺守護', cost:3, maxCopies:2, img: imgForId('A_TO_6') }
+      { id:'A_TO_1', name:'墓園守衛', cost:3, maxCopies:3, img: imgForId('A_TO_1') },
+      { id:'A_TO_2', name:'骷髏領主', cost:5, maxCopies:3, img: imgForId('A_TO_2') },
+      { id:'A_TO_3', name:'腐骨弓手', cost:4, maxCopies:3, img: imgForId('A_TO_3') },
+      { id:'A_TO_4', name:'陵衛戰士', cost:1, maxCopies:5, img: imgForId('A_TO_4') },
+      { id:'A_TO_5', name:'古殿祭者', cost:1, maxCopies:5, img: imgForId('A_TO_5') }
+      
     ],
     nether: [
       { id:'A_NT_1', name:'幽影獵手', cost:2, maxCopies:3, img: imgForId('A_NT_1') },
@@ -246,9 +250,9 @@
   };
 
   const bCards = [
-    { id:'B_1', name:'戰術支援', cost:2, maxCopies:3, img: imgForId('B_1') },
-    { id:'B_2', name:'補給運營', cost:1, maxCopies:4, img: imgForId('B_2') },
-    { id:'B_3', name:'前線增援', cost:3, maxCopies:2, img: imgForId('B_3') }
+    { id:'B_1', name:'戰術支援', cost:2, maxCopies:1, img: imgForId('B_1') },
+    { id:'B_2', name:'補給運營', cost:9, maxCopies:1, img: imgForId('B_2') },
+    { id:'B_3', name:'前線增援', cost:3, maxCopies:1, img: imgForId('B_3') }
   ];
 
   const cCards = Array.from({length:14}, (_,i)=>({
@@ -720,4 +724,3 @@
 </script>
 </body>
 </html>
-
