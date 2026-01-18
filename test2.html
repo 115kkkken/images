@@ -76,38 +76,35 @@
     @media (max-width:520px){ .card-item{width:100%;} .sub-card{width:calc(50% - 12px);} .leader{width:100%;} .unit-card{width:calc(50% - 12px);} }
     .flash{animation:flash 360ms ease;} @keyframes flash{0%{box-shadow:none;}40%{box-shadow:0 0 10px rgba(255,0,0,0.6);}100%{box-shadow:none;}}
 
-    /* ---------- Lightbox (點圖放大) ---------- */
-    .lightbox-backdrop{
+    /* ---------- Image zoom (lightbox) styles ---------- */
+    .img-zoom-backdrop{
       position:fixed;
       inset:0;
+      background:rgba(0,0,0,0.65);
+      z-index:12000;
       display:flex;
       align-items:center;
       justify-content:center;
-      background:rgba(7,16,24,0.68);
-      z-index:10001;
+      pointer-events:auto;
       opacity:0;
-      pointer-events:none;
       transition:opacity .28s ease;
-      -webkit-backdrop-filter: blur(6px);
-      backdrop-filter: blur(6px);
     }
-    .lightbox-backdrop.show{ opacity:1; pointer-events:auto; }
-    .lightbox-content{ max-width:92%; max-height:92%; text-align:center; }
-    .lightbox-img{
-      max-width:100%;
-      max-height:80vh;
-      border-radius:12px;
-      box-shadow:0 30px 80px rgba(0,0,0,0.6);
-      transform:scale(0.96);
-      transition:transform .28s cubic-bezier(.2,.9,.35,1), opacity .28s;
-      opacity:0;
+    .img-zoom-backdrop.show{opacity:1;}
+    .img-zoom-clone{
+      position:fixed;
+      z-index:12001;
+      will-change:transform, width, height, left, top;
+      border-radius:8px;
+      box-shadow:0 20px 60px rgba(0,0,0,0.6);
+      transition:transform .32s cubic-bezier(.2,.9,.25,1), left .32s ease, top .32s ease, width .32s ease, height .32s ease;
       cursor:zoom-out;
-      display:block;
-      margin:0 auto;
+      background:transparent;
+      overflow:hidden;
     }
-    .lightbox-backdrop.show .lightbox-img{ transform:scale(1); opacity:1; }
-    .lightbox-caption{ margin-top:8px;color:#cfe8ff; font-size:13px; }
-    /* End lightbox */
+    /* optional image styling inside clone */
+    .img-zoom-clone img{ width:100%; height:100%; object-fit:contain; display:block; pointer-events:none; user-select:none; }
+    /* disable text selection while zoom open */
+    body.img-zoom-open { touch-action: none; user-select: none; -webkit-user-select:none; }
   </style>
 </head>
 <body>
@@ -194,14 +191,6 @@
 
   </div>
 
-  <!-- Lightbox 放大檢視 -->
-  <div id="lightboxBackdrop" class="lightbox-backdrop" aria-hidden="true" role="dialog" aria-label="圖片預覽">
-    <div class="lightbox-content" id="lightboxContent">
-      <img id="lightboxImg" class="lightbox-img" src="" alt="">
-      <div id="lightboxCaption" class="lightbox-caption"></div>
-    </div>
-  </div>
-
 <script>
   // ---------------------------
   // Image preloading / caching
@@ -222,10 +211,9 @@
     cCards.forEach(c => pushUnique(c.id, c.img));
 
     const statusEl = document.getElementById('loadingStatus');
-    statusEl.textContent = '正在預載圖片…';
+    statusEl.textContent = '正在預��圖片…';
     await Promise.all(items.map(item => new Promise(resolve => {
       const img = new Image();
-      img.crossOrigin = 'anonymous';
       img.onload = () => { imageCache[item.id] = img; resolve(); };
       img.onerror = () => { imageCache[item.id] = null; resolve(); };
       img.src = item.img;
@@ -280,7 +268,7 @@
       { id:'A_TO_3', name:'腐骨弓手', cost:4, maxCopies:3, img: imgForId('A_TO_3') },
       { id:'A_TO_4', name:'陵衛戰士', cost:1, maxCopies:5, img: imgForId('A_TO_4') },
       { id:'A_TO_5', name:'古殿祭者', cost:1, maxCopies:5, img: imgForId('A_TO_5') }
-      
+
     ],
     nether: [
       { id:'A_NT_1', name:'幽影獵手', cost:2, maxCopies:3, img: imgForId('A_NT_1') },
@@ -333,7 +321,124 @@
   remainingBudgetEl.textContent = MAX_BUDGET;
   selectedCountEl.textContent = 0;
 
+  // ---------- Image zoom state ----------
+  let currentZoom = null; // { backdropEl, cloneEl, src, originalImgEl, rect }
+  let escKeyListener = null;
+
+  function openImageZoomFromElement(imgEl){
+    if(!imgEl) return;
+    const src = imgEl.src || imgEl.getAttribute('src');
+    if(!src) return;
+    // if already zoomed, close
+    if(currentZoom) { closeImageZoom(); return; }
+
+    // compute source rect
+    const rect = imgEl.getBoundingClientRect();
+    const vw = Math.max(document.documentElement.clientWidth, window.innerWidth || 0);
+    const vh = Math.max(document.documentElement.clientHeight, window.innerHeight || 0);
+
+    // create backdrop
+    const backdrop = document.createElement('div');
+    backdrop.className = 'img-zoom-backdrop';
+    backdrop.setAttribute('role','dialog');
+    backdrop.setAttribute('aria-modal','true');
+    backdrop.tabIndex = -1;
+
+    // create clone
+    const clone = document.createElement('div');
+    clone.className = 'img-zoom-clone';
+    // set initial position/size same as source
+    clone.style.left = rect.left + 'px';
+    clone.style.top = rect.top + 'px';
+    clone.style.width = rect.width + 'px';
+    clone.style.height = rect.height + 'px';
+    // put image inside
+    const inner = document.createElement('img');
+    inner.alt = imgEl.alt || '';
+    // prefer cached full src if exists in imageCache (imgEl might be using cached.src already)
+    inner.src = src;
+    clone.appendChild(inner);
+
+    // append to body
+    document.body.appendChild(backdrop);
+    document.body.appendChild(clone);
+    // prevent scrolling
+    document.body.classList.add('img-zoom-open');
+    document.body.style.overflow = 'hidden';
+
+    // after paint, animate to center & scaled
+    requestAnimationFrame(()=>{
+      backdrop.classList.add('show');
+      // compute target available size (padding 8% each side)
+      const maxW = vw * 0.92;
+      const maxH = vh * 0.88;
+      const scale = Math.min(maxW / rect.width, maxH / rect.height, 1.8); // limit max scale
+      // center position:
+      const targetCenterX = vw / 2;
+      const targetCenterY = vh / 2;
+      const currentCenterX = rect.left + rect.width / 2;
+      const currentCenterY = rect.top + rect.height / 2;
+      const translateX = targetCenterX - currentCenterX;
+      const translateY = targetCenterY - currentCenterY;
+      // instead of changing left/top, animate transform for smoothness
+      clone.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
+      clone.style.transformOrigin = 'center center';
+      // optionally increase border-radius -> 8px remains
+    });
+
+    // close handlers
+    function backdropClick(e){
+      // if click occurs on backdrop (outside clone), close
+      if(e.target === backdrop) closeImageZoom();
+    }
+    backdrop.addEventListener('click', backdropClick);
+    clone.addEventListener('click', closeImageZoom);
+
+    // Esc key
+    escKeyListener = (ev) => { if(ev.key === 'Escape') closeImageZoom(); };
+    document.addEventListener('keydown', escKeyListener);
+
+    currentZoom = { backdropEl: backdrop, cloneEl: clone, originalImgEl: imgEl };
+  }
+
+  function closeImageZoom(){
+    if(!currentZoom) return;
+    const { backdropEl, cloneEl, originalImgEl } = currentZoom;
+    // reverse animation: remove transform -> clone is positioned at same left/top/width/height so transform removal animates back
+    cloneEl.style.transform = '';
+    // when animation finishes, remove elements
+    const cleanup = ()=>{
+      if(backdropEl && backdropEl.parentNode) backdropEl.parentNode.removeChild(backdropEl);
+      if(cloneEl && cloneEl.parentNode) cloneEl.parentNode.removeChild(cloneEl);
+      document.body.classList.remove('img-zoom-open');
+      document.body.style.overflow = '';
+      if(escKeyListener) document.removeEventListener('keydown', escKeyListener);
+      currentZoom = null;
+    };
+    // hide backdrop immediately so opacity animates
+    backdropEl.classList.remove('show');
+    // wait for transition end on clone (use setTimeout fallback)
+    const t = setTimeout(cleanup, 360);
+    cloneEl.addEventListener('transitionend', function te(){
+      clearTimeout(t);
+      cloneEl.removeEventListener('transitionend', te);
+      cleanup();
+    });
+  }
+
+  // Helper: add zoom handler to an <img> element
+  function makeImgZoomable(imgEl){
+    if(!imgEl) return;
+    imgEl.style.cursor = 'zoom-in';
+    imgEl.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openImageZoomFromElement(imgEl);
+    });
+  }
+
+  // ---------------------------
   // Rendering & logic (same as before)...
+  // ---------------------------
   function renderLeaders(){
     leadersList.innerHTML = '';
     leaders.forEach(ld=>{
@@ -344,6 +449,8 @@
       el.tabIndex = 0;
       const src = (imageCache[ld.id] && imageCache[ld.id].src) ? imageCache[ld.id].src : ld.img;
       el.innerHTML = `<img src="${src}" alt="${ld.name}"><div class="label">${ld.name}</div>`;
+      // make image zoomable
+      makeImgZoomable(el.querySelector('img'));
       el.addEventListener('click', ()=> chooseLeader(ld.id));
       el.addEventListener('keydown', e => { if(e.key==='Enter' || e.key===' ') { e.preventDefault(); chooseLeader(ld.id);} });
       leadersList.appendChild(el);
@@ -365,6 +472,8 @@
         <label for="${cbId}" style="margin-left:6px;color:#cfe8ff">${disabled? '自動加入' : '加入大本營'}</label>
       </div>
     `;
+    // make image zoomable
+    makeImgZoomable(el.querySelector('img'));
     if(!disabled && onToggle){
       const checkbox = el.querySelector('input[type=checkbox]');
       checkbox.addEventListener('change', ()=> onToggle(card));
@@ -447,6 +556,9 @@
       const wrap = document.createElement('div'); wrap.className = 'sub-card'; wrap.dataset.cardId = card.id;
       const cached = imageCache[card.id];
       const imgEl = document.createElement('img'); imgEl.src = (cached && cached.src) ? cached.src : card.img; imgEl.alt = card.name;
+      // zoomable
+      makeImgZoomable(imgEl);
+
       const name = document.createElement('div'); name.className='card-name'; name.textContent = card.name;
       const cost = document.createElement('div'); cost.className='card-cost'; cost.textContent = `費用：${card.cost}`;
       const maxEl = document.createElement('div'); maxEl.className='card-max'; maxEl.textContent = `上限：${card.maxCopies} 張`;
@@ -514,6 +626,9 @@
         <div class="upgrades"></div>
         <div class="unit-actions"></div>
       `;
+      // make zoomable
+      makeImgZoomable(el.querySelector('img'));
+
       const upgradesContainer = el.querySelector('.upgrades');
       UPGRADES.forEach(up=>{
         const btn = document.createElement('button');
@@ -584,5 +699,185 @@
     const labelH = 20; // label area under image
     const cardBoxH = cardImageH + labelH + 6; // total row height per card (consistent)
 
-`
-
+    const campRows = Math.ceil(campCards.length / cardsPerRow);
+    const unitsPerRow = 4;
+    const unitImageW = Math.floor((baseW - padding*2 - (unitsPerRow-1)*12)/unitsPerRow);
+    const unitImageH = 110; // fixed unit image H
+    const unitBoxH = unitImageH + labelH + 14; // total unit box height
+
+    const unitRows = Math.max(1, Math.ceil(units.length / unitsPerRow));
+    const headerH = 120;
+    const hBase = padding*2 + headerH + campRows*cardBoxH + 24 + unitRows*(unitBoxH + 20);
+    const canvasW = baseW * scaleFactor;
+    const canvasH = Math.max(600, Math.floor(hBase * scaleFactor));
+
+    const canvas = document.createElement('canvas');
+    canvas.width = canvasW; canvas.height = canvasH;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(scaleFactor, scaleFactor);
+
+    // background & header
+    ctx.fillStyle = '#071018'; ctx.fillRect(0,0,baseW,canvasH/scaleFactor);
+    ctx.fillStyle = '#fff'; ctx.font = `700 28px sans-serif`; ctx.fillText(deckName, padding, padding + 28);
+    ctx.font = `14px sans-serif`; ctx.fillStyle = '#cfe8ff';
+    const tacticsLines = wrapText(ctx, tactics, baseW - padding*2);
+    tacticsLines.forEach((ln,i)=> ctx.fillText(ln, padding, padding + 28 + (i+1)*18));
+    const rem = Math.max(0, MAX_BUDGET - usedBudget);
+    ctx.fillStyle = '#9ae6b4'; ctx.font = `600 14px sans-serif`;
+    ctx.fillText(`剩餘費用: ${rem}`, baseW - padding - 220, padding + 24);
+    ctx.fillText(`已選卡牌數量: ${units.length}`, baseW - padding - 220, padding + 44);
+
+    // camp title
+    let y = padding + headerH;
+    ctx.fillStyle = '#cfe8ff'; ctx.font = `600 16px sans-serif`; ctx.fillText('大本營牌庫', padding, y - 10);
+
+    // draw camp grid: each card uses fixed image box (cardImageW x cardImageH) and we CENTER and CONTAIN the original image into that box.
+    let cx = padding; let cy = y + 12; let col = 0;
+    campCards.forEach((c,i)=>{
+      const img = imageCache[c.id] || null;
+      // card background
+      ctx.fillStyle = 'rgba(255,255,255,0.02)'; ctx.fillRect(cx, cy, cardImageW, cardBoxH - 6);
+      // draw contained image centered inside (no cropping)
+      if(img){
+        // clip to the image box area to ensure no overflow (defensive)
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(cx, cy, cardImageW, cardImageH);
+        ctx.clip();
+        drawImageContain(ctx, img, cx, cy, cardImageW, cardImageH);
+        ctx.restore();
+      } else {
+        ctx.fillStyle = 'rgba(255,255,255,0.01)'; ctx.fillRect(cx, cy, cardImageW, cardImageH);
+        ctx.fillStyle = '#ccc'; ctx.font = `12px sans-serif`; ctx.fillText('圖示無法載入', cx + 8, cy + (cardImageH/2));
+      }
+      // name under image in reserved label area
+      ctx.fillStyle = '#fff'; ctx.font = `600 12px sans-serif`; ctx.fillText(c.name, cx + 6, cy + cardImageH + 14);
+      col++; cx += cardImageW + 12; if(col >= cardsPerRow){ col = 0; cx = padding; cy += cardBoxH; }
+    });
+
+    // units section
+    let unitsY = cy + 130;
+    ctx.fillStyle = '#cfe8ff'; ctx.font = `600 16px sans-serif`; ctx.fillText('先發陣容與升級', padding, unitsY - 10);
+
+    let ux = padding; let uy = unitsY + 12;
+    units.forEach((u,i)=>{
+      const card = campCards.find(c=>c.id===u.cardId) || { name:u.cardName, img: '' };
+      const img = imageCache[card.id] || null;
+      ctx.fillStyle = 'rgba(255,255,255,0.02)'; ctx.fillRect(ux, uy, unitImageW, unitBoxH - 10);
+      if(img){
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(ux, uy, unitImageW, unitImageH);
+        ctx.clip();
+        drawImageContain(ctx, img, ux, uy, unitImageW, unitImageH);
+        ctx.restore();
+      } else {
+        ctx.fillStyle='rgba(255,255,255,0.01)'; ctx.fillRect(ux,uy,unitImageW,unitImageH);
+        ctx.fillStyle='#ccc'; ctx.font='12px sans-serif'; ctx.fillText('圖示無法載入', ux + 8, uy + (unitImageH/2));
+      }
+      ctx.fillStyle = '#fff'; ctx.font = `600 13px sans-serif`; ctx.fillText(card.name, ux + 8, uy + unitImageH + 16);
+      ctx.fillStyle = '#9ae6b4'; ctx.font = `500 12px sans-serif`;
+      const ups = Array.from(u.upgrades).map(k=> (UPGRADES.find(x=>x.key===k) || {}).label ).filter(Boolean);
+      const upText = ups.length ? ups.join(' / ') : '無';
+      wrapDrawText(ctx, upText, ux + 8, uy + unitImageH + 36, unitImageW - 12, 14);
+      ux += unitImageW + 12;
+      if((i+1) % unitsPerRow === 0){ ux = padding; uy += unitBoxH + 20; }
+    });
+
+    return new Promise((resolve)=>{
+      canvas.toBlob(function(blob){
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        const safe = deckName.replace(/[^\w\-_\u4e00-\u9fff]/g,'_') || 'deck';
+        a.download = `${safe}.png`;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(()=> { URL.revokeObjectURL(a.href); document.body.removeChild(a); resolve(); }, 1500);
+      }, 'image/png');
+    });
+  }
+
+  // drawImageContain: draw image fully inside box, preserve original aspect ratio; image is centered, not cropped
+  function drawImageContain(ctx, img, x, y, w, h){
+    if(!img) return;
+    const iw = img.width || 1, ih = img.height || 1;
+    const scale = Math.min(w/iw, h/ih);
+    const nw = iw * scale;
+    const nh = ih * scale;
+    const dx = x + (w - nw) / 2;
+    const dy = y + (h - nh) / 2;
+    try { ctx.drawImage(img, dx, dy, nw, nh); } catch(e){ ctx.fillStyle='rgba(255,255,255,0.02)'; ctx.fillRect(x,y,w,h); }
+  }
+
+  // helpers
+  function wrapText(ctx, text, maxWidth){
+    if(!text) return [];
+    const words = text.split(/\s+/);
+    const lines = []; let line = '';
+    for(let i=0;i<words.length;i++){
+      const test = line ? (line + ' ' + words[i]) : words[i];
+      const w = ctx.measureText(test).width;
+      if(w > maxWidth && line){ lines.push(line); line = words[i]; } else { line = test; }
+    }
+    if(line) lines.push(line);
+    return lines;
+  }
+  function wrapDrawText(ctx, text, x, y, maxW, lineH){
+    const words = text.split(' '); let line = ''; let curY = y;
+    for(let i=0;i<words.length;i++){
+      const test = line ? (line + ' ' + words[i]) : words[i];
+      const w = ctx.measureText(test).width;
+      if(w > maxW && line){ ctx.fillText(line, x, curY); line = words[i]; curY += lineH; } else { line = test; }
+    }
+    if(line) ctx.fillText(line, x, curY);
+  }
+
+  // Init and event wiring (same as previous)
+  async function init(){
+    document.getElementById('enterLineupBtn').disabled = true;
+    document.getElementById('confirmBtn').disabled = true;
+    document.getElementById('clearLineupBtn').disabled = true;
+    document.getElementById('resetCampBtn').disabled = true;
+
+    await preloadImagesForAll();
+
+    document.getElementById('enterLineupBtn').disabled = false;
+    document.getElementById('confirmBtn').disabled = false;
+    document.getElementById('clearLineupBtn').disabled = false;
+    document.getElementById('resetCampBtn').disabled = false;
+
+    renderLeaders(); renderACards(); renderBCards(); renderCCards(); updateLimitHints();
+  }
+
+  document.getElementById('tabCamp').addEventListener('click', ()=> { tabCamp.classList.add('active'); tabLineup.classList.remove('active'); campStage.style.display = ''; lineupStage.style.display = 'none'; });
+  document.getElementById('tabLineup').addEventListener('click', ()=> { tabLineup.classList.add('active'); tabCamp.classList.remove('active'); campStage.style.display = 'none'; lineupStage.style.display = ''; });
+  document.getElementById('enterLineupBtn').addEventListener('click', ()=> { if(!chosenLeaderId){ alert('請先選擇一位領主。'); return;} buildCampCardsFromSelections(); renderLineupGallery(); tabLineup.click(); });
+  document.getElementById('resetCampBtn').addEventListener('click', ()=> { if(!confirm('重置大本營會清除已選擇內容，確定嗎？')) return; resetCamp(); });
+  document.getElementById('backToCampBtn').addEventListener('click', ()=> { tabCamp.click(); });
+  document.getElementById('clearLineupBtn').addEventListener('click', ()=> { if(!confirm('重置先發將清除所有選擇數量與升級，確定嗎？')) return; const leaderUnit = units.find(u => u.isLeader); units.length = 0; if(leaderUnit) units.push(leaderUnit); lineupCounts.clear(); campCards.forEach(c => lineupCounts.set(c.id, c.isLeader ? 1 : 0)); usedBudget = 0; updateBudgetDisplay(); renderLineupGallery(); });
+  document.getElementById('confirmBtn').addEventListener('click', ()=> { openConfirmModal(); });
+
+  function openConfirmModal(){
+    const backdrop = document.createElement('div'); backdrop.className = 'modal-backdrop';
+    const modal = document.createElement('div'); modal.className = 'modal';
+    modal.innerHTML = `
+      <h3>匯出先發陣容</h3>
+      <label>副牌組名稱：</label>
+      <input id="deckName" type="text" placeholder="輸入牌組名稱">
+      <label>戰術打法：</label>
+      <textarea id="deckTactics" rows="4" placeholder="輸入戰術說明"></textarea>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;">
+        <button id="cancelExport" class="btn-ghost">取消</button>
+        <button id="doExport" class="btn-primary">匯出為高畫質圖片</button>
+      </div>
+      <div style="font-size:12px;margin-top:8px;color:#cfe8ff">備註：使用 repo 的相對路徑 images/，在 GitHub Pages 中 CORS 不會阻擋。</div>
+    `;
+    backdrop.appendChild(modal); document.body.appendChild(backdrop);
+    modal.querySelector('#cancelExport').addEventListener('click', ()=> document.body.removeChild(backdrop));
+    modal.querySelector('#doExport').addEventListener('click', async ()=> { const name = modal.querySelector('#deckName').value || '未命名牌組'; const tactics = modal.querySelector('#deckTactics').value || ''; await exportDeckAsImage(name, tactics); document.body.removeChild(backdrop); });
+  }
+
+  init();
+</script>
+</body>
+</html>
