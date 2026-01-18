@@ -32,41 +32,13 @@
     .panel{background:var(--panel); border-radius:10px; padding:12px; border:1px solid rgba(255,255,255,0.04);}
     .leaders{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;}
     .leader{width:22%;min-width:140px; text-align:center; cursor:pointer; user-select:none;}
-    /* 改為 contain：保持原圖比例，整張圖會被完整顯示（不裁切），並且所有圖片使用相同框尺寸 */
-    /* 修改 A、B、C 卡片的圖片 */
-.card-item img {
-    width: 100%;
-    border-radius: 6px;
-    display: block;
-    height: auto;        /* 從 140px 改為 auto */
-    object-fit: contain; /* 從 cover 改為 contain，保證不切圖 */
-}
-
-/* 修改下方小卡片（先發陣容）的圖片 */
-.sub-card img, .unit-card img {
-    width: 100%;
-    border-radius: 6px; 
-    display: block; 
-    height: auto;        /* 從 120px 改為 auto */
-    object-fit: contain; 
-}
-    .leader img
-    {
-      width:100%;
-      height:140px;            /* 固定顯示高度 */
-      object-fit:contain;      /* preserve aspect ratio, no cropping */
-      object-position:center;
-      border-radius:8px;
-      display:block;
-      background:#000;         /* 黑底避免透明或白邊突兀 */
-      padding:6px;             /* 給 contain 時的「留白」一點間距，使視覺與領主一致 */
-      box-sizing: border-box;
-    }
+    .leader img{width:100%;border-radius:8px;display:block;border:2px solid transparent;}
     .leader .label{margin-top:6px;font-weight:600;color:#ddd;}
     .leader.selected img{border-color:var(--accent); box-shadow:0 0 12px rgba(125,211,252,0.08);}
     .section-title{font-weight:700;margin-bottom:8px;color:#cfe8ff;}
     .card-list{display:flex;flex-wrap:wrap;gap:10px;}
     .card-item{width:calc(33.333% - 8px); min-width:140px; background:rgba(255,255,255,0.02); padding:8px; border-radius:8px; border:1px solid rgba(255,255,255,0.03); box-sizing:border-box;}
+    .card-item img{width:100%; border-radius:6px; display:block; height:140px; object-fit:cover; cursor:zoom-in;}
     .card-meta{display:flex;justify-content:space-between;align-items:center;margin-top:6px;font-size:13px;}
     .card-meta .small{opacity:.9;}
     .card-controls{display:flex;align-items:center;gap:8px;margin-top:8px;justify-content:center;}
@@ -74,6 +46,7 @@
     .card-controls input[type="checkbox"]{transform:scale(1.1);}
     .sub-gallery{display:flex;flex-wrap:wrap;gap:12px;margin-top:12px;justify-content:center;}
     .sub-card{width:calc(20% - 12px);min-width:140px;background:rgba(255,255,255,0.02);border-radius:8px;padding:8px;box-sizing:border-box;border:1px solid rgba(255,255,255,0.03);}
+    .sub-card img{width:100%;border-radius:6px; display:block; height:120px; object-fit:cover; cursor:zoom-in;}
     .card-cost{color:#9ae6b4;font-weight:700;margin-top:6px;}
     .card-max{margin-top:4px;color:#cfe8ff;opacity:.9;font-size:13px;}
     .count{min-width:36px;text-align:center;font-weight:700;}
@@ -83,6 +56,7 @@
     .selected-units-wrap{margin-top:18px;}
     .selected-units{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin-top:8px;}
     .unit-card{width:calc(20% - 12px);min-width:160px;background:rgba(255,255,255,0.02);border-radius:8px;padding:8px;box-sizing:border-box;border:1px solid rgba(255,255,255,0.03);}
+    .unit-card img{width:100%;border-radius:6px; display:block; height:120px; object-fit:cover; cursor:zoom-in;}
     .unit-card .unit-title{font-weight:700;margin-top:6px;}
     .upgrades{display:flex;flex-direction:column;gap:6px;margin-top:8px;}
     .upgrade-btn{padding:6px 8px;border-radius:6px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:var(--accent);cursor:pointer;}
@@ -101,6 +75,39 @@
     @media (max-width:900px){ .card-item{width:calc(50% - 8px);} .sub-card{width:calc(33.333% - 12px);} .leader{width:45%;} .unit-card{width:calc(33.333% - 12px);} }
     @media (max-width:520px){ .card-item{width:100%;} .sub-card{width:calc(50% - 12px);} .leader{width:100%;} .unit-card{width:calc(50% - 12px);} }
     .flash{animation:flash 360ms ease;} @keyframes flash{0%{box-shadow:none;}40%{box-shadow:0 0 10px rgba(255,0,0,0.6);}100%{box-shadow:none;}}
+
+    /* ---------- Lightbox (點圖放大) ---------- */
+    .lightbox-backdrop{
+      position:fixed;
+      inset:0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      background:rgba(7,16,24,0.68);
+      z-index:10001;
+      opacity:0;
+      pointer-events:none;
+      transition:opacity .28s ease;
+      -webkit-backdrop-filter: blur(6px);
+      backdrop-filter: blur(6px);
+    }
+    .lightbox-backdrop.show{ opacity:1; pointer-events:auto; }
+    .lightbox-content{ max-width:92%; max-height:92%; text-align:center; }
+    .lightbox-img{
+      max-width:100%;
+      max-height:80vh;
+      border-radius:12px;
+      box-shadow:0 30px 80px rgba(0,0,0,0.6);
+      transform:scale(0.96);
+      transition:transform .28s cubic-bezier(.2,.9,.35,1), opacity .28s;
+      opacity:0;
+      cursor:zoom-out;
+      display:block;
+      margin:0 auto;
+    }
+    .lightbox-backdrop.show .lightbox-img{ transform:scale(1); opacity:1; }
+    .lightbox-caption{ margin-top:8px;color:#cfe8ff; font-size:13px; }
+    /* End lightbox */
   </style>
 </head>
 <body>
@@ -187,6 +194,14 @@
 
   </div>
 
+  <!-- Lightbox 放大檢視 -->
+  <div id="lightboxBackdrop" class="lightbox-backdrop" aria-hidden="true" role="dialog" aria-label="圖片預覽">
+    <div class="lightbox-content" id="lightboxContent">
+      <img id="lightboxImg" class="lightbox-img" src="" alt="">
+      <div id="lightboxCaption" class="lightbox-caption"></div>
+    </div>
+  </div>
+
 <script>
   // ---------------------------
   // Image preloading / caching
@@ -210,6 +225,7 @@
     statusEl.textContent = '正在預載圖片…';
     await Promise.all(items.map(item => new Promise(resolve => {
       const img = new Image();
+      img.crossOrigin = 'anonymous';
       img.onload = () => { imageCache[item.id] = img; resolve(); };
       img.onerror = () => { imageCache[item.id] = null; resolve(); };
       img.src = item.img;
@@ -233,7 +249,7 @@
   ];
 
   function imgForId(id){
-    return `${id.toLowerCase()}.webp`;
+    return `${id.toLowerCase()}.webp`; // adjust to your filenames
   }
 
   const leaders = [
@@ -245,7 +261,6 @@
     { id:'L_N_B', name:'幽冥 領主 B', type:'nether', img: imgForId('L_N_B') }
   ];
 
-  // (略過中間卡資料以節省篇幅 — 使用你原本的資料塊；上面示範的程式碼保留)
   const aCardsByType = {
     demon: [
       { id:'A_DE_1', name:'魔力使者', cost:8, maxCopies:2, img: imgForId('A_DE_1') },
@@ -253,7 +268,11 @@
       { id:'A_DE_3', name:'淵能術者', cost:3, maxCopies:2, img: imgForId('A_DE_3') },
       { id:'A_DE_4', name:'饕餮喚靈', cost:1, maxCopies:3, img: imgForId('A_DE_4') },
       { id:'A_DE_5', name:'惡靈騎士', cost:4, maxCopies:3, img: imgForId('A_DE_5') },
-      { id:'A_DE_6', name:'腐化先鋒', cost:3, maxCopies:1, img: imgForId('A_DE_6') }
+      { id:'A_DE_6', name:'腐化先鋒', cost:3, maxCopies:1, img: imgForId('A_DE_6') },
+      { id:'A_DE_7', name:'地獄火焰', cost:3, maxCopies:1, img: imgForId('A_DE_7') },
+      { id:'A_DE_8', name:'腐化先鋒', cost:3, maxCopies:1, img: imgForId('A_DE_8') },
+      { id:'A_DE_9', name:'腐化先鋒', cost:3, maxCopies:1, img: imgForId('A_DE_9') },
+      { id:'A_DE_10', name:'腐化先鋒', cost:3, maxCopies:1, img: imgForId('A_DE_10') }
     ],
     tomb: [
       { id:'A_TO_1', name:'墓園守衛', cost:3, maxCopies:3, img: imgForId('A_TO_1') },
@@ -261,11 +280,14 @@
       { id:'A_TO_3', name:'腐骨弓手', cost:4, maxCopies:3, img: imgForId('A_TO_3') },
       { id:'A_TO_4', name:'陵衛戰士', cost:1, maxCopies:5, img: imgForId('A_TO_4') },
       { id:'A_TO_5', name:'古殿祭者', cost:1, maxCopies:5, img: imgForId('A_TO_5') }
+      
     ],
     nether: [
       { id:'A_NT_1', name:'幽影獵手', cost:2, maxCopies:3, img: imgForId('A_NT_1') },
       { id:'A_NT_2', name:'冥火術士', cost:3, maxCopies:2, img: imgForId('A_NT_2') },
-      { id:'A_NT_3', name:'虛無行者', cost:4, maxCopies:1, img: imgForId('A_NT_3') }
+      { id:'A_NT_3', name:'虛無行者', cost:4, maxCopies:1, img: imgForId('A_NT_3') },
+      { id:'A_NT_4', name:'沉默守衛', cost:2, maxCopies:3, img: imgForId('A_NT_4') },
+      { id:'A_NT_5', name:'幽冥博士', cost:1, maxCopies:5, img: imgForId('A_NT_5') }
     ]
   };
 
@@ -275,40 +297,292 @@
     { id:'B_3', name:'前線增援', cost:3, maxCopies:1, img: imgForId('B_3') }
   ];
 
-  const cCards = Array.from({length:6}, (_,i)=>({
+  const cCards = Array.from({length:14}, (_,i)=>({
     id:`C_${i+1}`, name:`C 卡 ${i+1}`, cost: (i%5)+1, maxCopies: (i%4)+2,
     img: imgForId(`C_${i+1}`)
   }));
 
-  // 其餘程式（渲染、互動、匯出等）保持你原本實作
-  // 為簡潔起見我省略重複的程式碼段：render / toggle / buildCamp / export 仍與前版本相同
-  // 如果你要，我可以把完整的 script（包含所有函式）再貼回一次與整合。
+  // STATE
+  let chosenLeaderId = null;
+  const campSelections = new Set();
+  const selectedOtherA = new Set();
+  const selectedCtypes = new Set();
+  let campCards = [];
+  const lineupCounts = new Map();
+  const units = [];
 
-  // 為確保 UI 使用預載圖片（避免 CLS），在 init 時先預載再 render
-  async function init(){
-    document.getElementById('enterLineupBtn').disabled = true;
-    document.getElementById('confirmBtn').disabled = true;
-    document.getElementById('clearLineupBtn').disabled = true;
-    document.getElementById('resetCampBtn').disabled = true;
+  // UI refs
+  const leadersList = document.getElementById('leadersList');
+  const aCardsArea = document.getElementById('aCardsArea');
+  const bCardsArea = document.getElementById('bCardsArea');
+  const cCardsArea = document.getElementById('cCardsArea');
+  const aLimitHint = document.getElementById('aLimitHint');
+  const cLimitHint = document.getElementById('cLimitHint');
 
-    await preloadImagesForAll();
+  const tabCamp = document.getElementById('tabCamp');
+  const tabLineup = document.getElementById('tabLineup');
+  const campStage = document.getElementById('campStage');
+  const lineupStage = document.getElementById('lineupStage');
 
-    document.getElementById('enterLineupBtn').disabled = false;
-    document.getElementById('confirmBtn').disabled = false;
-    document.getElementById('clearLineupBtn').disabled = false;
-    document.getElementById('resetCampBtn').disabled = false;
+  const lineupGallery = document.getElementById('lineupGallery');
+  const selectedUnitsEl = document.getElementById('selectedUnits');
 
-    // 呼叫你現有的 render 函式（在本檔中應存在）
-    if (typeof renderLeaders === 'function') renderLeaders();
-    if (typeof renderACards === 'function') renderACards();
-    if (typeof renderBCards === 'function') renderBCards();
-    if (typeof renderCCards === 'function') renderCCards();
-    if (typeof updateLimitHints === 'function') updateLimitHints();
+  const remainingBudgetEl = document.getElementById('remainingBudget');
+  const selectedCountEl = document.getElementById('selectedCount');
+
+  remainingBudgetEl.textContent = MAX_BUDGET;
+  selectedCountEl.textContent = 0;
+
+  // Rendering & logic (same as before)...
+  function renderLeaders(){
+    leadersList.innerHTML = '';
+    leaders.forEach(ld=>{
+      const el = document.createElement('div');
+      el.className = 'leader';
+      el.dataset.id = ld.id;
+      el.dataset.type = ld.type;
+      el.tabIndex = 0;
+      const src = (imageCache[ld.id] && imageCache[ld.id].src) ? imageCache[ld.id].src : ld.img;
+      el.innerHTML = `<img src="${src}" alt="${ld.name}"><div class="label">${ld.name}</div>`;
+      el.addEventListener('click', ()=> chooseLeader(ld.id));
+      el.addEventListener('keydown', e => { if(e.key==='Enter' || e.key===' ') { e.preventDefault(); chooseLeader(ld.id);} });
+      leadersList.appendChild(el);
+    });
   }
 
-  // 如果你需要我把完整（未省略）腳本整個貼回去（包含已存在的 exportDeckAsImage），我可以把整個合併版提供給你。
-  init();
-</script>
-</body>
-</html>
+  function makeCardCheckbox(card, checked=false, cls='', disabled=false, onToggle=null){
+    const el = document.createElement('div');
+    el.className = 'card-item';
+    const cached = imageCache[card.id];
+    const src = (cached && cached.src) ? cached.src : card.img;
+    const cbId = `cb_${card.id}`;
+    const disabledAttr = disabled ? 'disabled' : '';
+    el.innerHTML = `
+      <img src="${src}" alt="${card.name}">
+      <div class="card-meta"><div class="small">${card.name}</div><div class="small">費:${card.cost} 上限:${card.maxCopies}</div></div>
+      <div class="card-controls">
+        <input data-card-id="${card.id}" data-card-type="${cls}" type="checkbox" id="${cbId}" ${checked?'checked':''} ${disabledAttr}>
+        <label for="${cbId}" style="margin-left:6px;color:#cfe8ff">${disabled? '自動加入' : '加入大本營'}</label>
+      </div>
+    `;
+    if(!disabled && onToggle){
+      const checkbox = el.querySelector('input[type=checkbox]');
+      checkbox.addEventListener('change', ()=> onToggle(card));
+    }
+    return el;
+  }
 
+  function renderACards(){
+    aCardsArea.innerHTML = '';
+    if(!chosenLeaderId){ aCardsArea.innerHTML = '<div class="hint">請先選擇領主以載入對應 A 卡</div>'; return; }
+    const leader = leaders.find(l=>l.id===chosenLeaderId);
+    (aCardsByType[leader.type]||[]).forEach(card=> aCardsArea.appendChild(makeCardCheckbox(card,true,'a-same',true,null)));
+    Object.keys(aCardsByType).forEach(type=>{
+      if(type === leader.type) return;
+      aCardsByType[type].forEach(card=>{
+        const node = makeCardCheckbox(card, campSelections.has(card.id), 'a-other', false, ()=> toggleOtherA(card));
+        aCardsArea.appendChild(node);
+      });
+    });
+  }
+  function renderBCards(){ bCardsArea.innerHTML=''; bCards.forEach(card=> bCardsArea.appendChild(makeCardCheckbox(card, campSelections.has(card.id), 'b', false, ()=> toggleCampCard(card)))); }
+  function renderCCards(){ cCardsArea.innerHTML=''; cCards.forEach(card=> cCardsArea.appendChild(makeCardCheckbox(card, campSelections.has(card.id), 'c', false, ()=> toggleCType(card)))); updateCCheckboxStates(); }
+
+  function chooseLeader(id){
+    chosenLeaderId = id;
+    document.querySelectorAll('.leader').forEach(el => el.classList.toggle('selected', el.dataset.id === id));
+    campSelections.clear();
+    selectedOtherA.clear();
+    selectedCtypes.clear();
+    campSelections.add(id);
+    const leader = leaders.find(l=>l.id===id);
+    (aCardsByType[leader.type]||[]).forEach(card=>campSelections.add(card.id));
+    renderACards(); renderBCards(); renderCCards(); updateLimitHints();
+  }
+
+  function toggleCampCard(card){ campSelections.has(card.id) ? campSelections.delete(card.id) : campSelections.add(card.id); }
+  function toggleOtherA(card){
+    const id = card.id;
+    if(campSelections.has(id)){ campSelections.delete(id); selectedOtherA.delete(id); }
+    else {
+      if(selectedOtherA.size >= 2){ aLimitHint.classList.add('flash'); setTimeout(()=> aLimitHint.classList.remove('flash'),360); const cb=document.querySelector(`#cb_${id}`); if(cb) cb.checked=false; return; }
+      campSelections.add(id); selectedOtherA.add(id);
+    }
+    updateLimitHints();
+  }
+  function toggleCType(card){
+    const id = card.id; const checkbox = document.querySelector(`#cb_${id}`);
+    if(campSelections.has(id)){ campSelections.delete(id); selectedCtypes.delete(id); updateCCheckboxStates(); updateLimitHints(); return; }
+    if(selectedCtypes.size >= 2){ if(checkbox) checkbox.checked = false; cLimitHint.classList.add('flash'); setTimeout(()=> cLimitHint.classList.remove('flash'),360); return; }
+    campSelections.add(id); selectedCtypes.add(id); updateCCheckboxStates(); updateLimitHints();
+  }
+  function updateCCheckboxStates(){ const checkboxes = Array.from(cCardsArea.querySelectorAll('input[type=checkbox]')); if(selectedCtypes.size >= 2){ checkboxes.forEach(cb=>{ if(cb.checked) return; cb.disabled = true; }); } else { checkboxes.forEach(cb=>cb.disabled = false); } }
+  function updateLimitHints(){ aLimitHint.textContent = `已選擇其他 A 卡種類：${selectedOtherA.size} / 2（只能從未被自動加入的其他兩類 A 卡中選）`; cLimitHint.textContent = `已選擇 C 卡種類：${selectedCtypes.size} / 2`; }
+  function resetCamp(){ chosenLeaderId=null; campSelections.clear(); selectedOtherA.clear(); selectedCtypes.clear(); renderACards(); renderBCards(); renderCCards(); document.querySelectorAll('.leader').forEach(el=>el.classList.remove('selected')); updateLimitHints(); }
+
+  // build camp cards
+  function buildCampCardsFromSelections(){
+    const cards = [];
+    if(chosenLeaderId){ const leader = leaders.find(l=>l.id===chosenLeaderId); cards.push({ id: leader.id, name: leader.name, img: leader.img, cost:0, maxCopies:1, isLeader:true }); }
+    campSelections.forEach(id=>{
+      if(id === chosenLeaderId) return;
+      let found = null;
+      Object.values(aCardsByType).some(arr=>{ const c = arr.find(x=>x.id===id); if(c){ found = c; return true;} return false; });
+      if(!found) found = bCards.find(x=>x.id===id) || cCards.find(x=>x.id===id);
+      if(found) cards.push({ id: found.id, name: found.name, img: found.img, cost: found.cost, maxCopies: found.maxCopies, isLeader:false });
+    });
+    campCards = cards;
+    lineupCounts.clear();
+    campCards.forEach(c => lineupCounts.set(c.id, c.isLeader ? 1 : 0));
+    units.length = 0;
+    if(chosenLeaderId){ const leader = leaders.find(l=>l.id===chosenLeaderId); const uid = 'leader_' + (Date.now()); units.push({ uid, cardId: leader.id, cardName: leader.name, upgrades: new Set(), upgradesCost: 0, isLeader: true }); }
+    usedBudget = 0; updateBudgetDisplay(); updateSelectedCount();
+  }
+
+  // lineup UI & unit management code (same as before)...
+  function renderLineupGallery(){
+    lineupGallery.innerHTML = '';
+    if(!campCards.length){ lineupGallery.innerHTML = '<div class="hint">請先建立大本營 (Camp) 以加入先發卡池。</div>'; return; }
+    campCards.forEach(card=>{
+      const wrap = document.createElement('div'); wrap.className = 'sub-card'; wrap.dataset.cardId = card.id;
+      const cached = imageCache[card.id];
+      const imgEl = document.createElement('img'); imgEl.src = (cached && cached.src) ? cached.src : card.img; imgEl.alt = card.name;
+      const name = document.createElement('div'); name.className='card-name'; name.textContent = card.name;
+      const cost = document.createElement('div'); cost.className='card-cost'; cost.textContent = `費用：${card.cost}`;
+      const maxEl = document.createElement('div'); maxEl.className='card-max'; maxEl.textContent = `上限：${card.maxCopies} 張`;
+      const controls = document.createElement('div'); controls.className='count-controls';
+      if(card.isLeader){ const fixed = document.createElement('div'); fixed.className='count'; fixed.textContent='領主 (1)'; controls.appendChild(fixed); }
+      else {
+        const btnMinus = document.createElement('button'); btnMinus.textContent='−';
+        const countSpan = document.createElement('div'); countSpan.className='count'; countSpan.textContent = lineupCounts.get(card.id) || 0;
+        const btnPlus = document.createElement('button'); btnPlus.textContent='+';
+        btnPlus.addEventListener('click', ()=> attemptAddCard(card, countSpan, btnPlus));
+        btnMinus.addEventListener('click', ()=> attemptRemoveCard(card, countSpan));
+        controls.appendChild(btnMinus); controls.appendChild(countSpan); controls.appendChild(btnPlus);
+      }
+      wrap.appendChild(imgEl); wrap.appendChild(name); wrap.appendChild(cost); wrap.appendChild(maxEl); wrap.appendChild(controls);
+      lineupGallery.appendChild(wrap);
+    });
+    updatePlusButtonsState(); renderSelectedUnits();
+  }
+
+  function attemptAddCard(card, countSpan, plusButton){
+    const current = lineupCounts.get(card.id) || 0;
+    if(current >= card.maxCopies){ plusButton.classList.add('flash'); setTimeout(()=> plusButton.classList.remove('flash'),360); return; }
+    if(usedBudget + card.cost > MAX_BUDGET){ remainingBudgetEl.classList.add('flash'); setTimeout(()=> remainingBudgetEl.classList.remove('flash'),360); plusButton.classList.add('flash'); setTimeout(()=> plusButton.classList.remove('flash'),360); return; }
+    const uid = 'u_' + Date.now() + '_' + Math.floor(Math.random()*1000);
+    units.push({ uid, cardId: card.id, cardName: card.name, upgrades: new Set(), upgradesCost: 0, isLeader:false });
+    lineupCounts.set(card.id, current + 1);
+    usedBudget += card.cost;
+    countSpan.textContent = lineupCounts.get(card.id);
+    updateBudgetDisplay(); updatePlusButtonsState(); renderSelectedUnits();
+  }
+
+  function attemptRemoveCard(card, countSpan){
+    const current = lineupCounts.get(card.id) || 0;
+    if(current <= 0) return;
+    for(let i = units.length - 1; i >= 0; i--){
+      if(units[i].cardId === card.id && !units[i].isLeader){
+        const unit = units.splice(i,1)[0];
+        usedBudget -= (card.cost + unit.upgradesCost);
+        if(usedBudget < 0) usedBudget = 0;
+        break;
+      }
+    }
+    lineupCounts.set(card.id, current - 1);
+    countSpan.textContent = lineupCounts.get(card.id);
+    updateBudgetDisplay(); updatePlusButtonsState(); renderSelectedUnits();
+  }
+
+  function renderSelectedUnits(){
+    selectedUnitsEl.innerHTML = '';
+    if(units.length === 0){ selectedUnitsEl.innerHTML = '<div class="hint">你尚未選擇先發單位。按 + 新增，新增後可為單位加裝升級。</div>'; updateSelectedCount(); return; }
+    const leaderUnit = units.find(u => u.isLeader);
+    const otherUnits = units.filter(u => !u.isLeader);
+    const ordered = leaderUnit ? [leaderUnit, ...otherUnits] : otherUnits;
+    ordered.forEach(unit=>{
+      const cardInfo = campCards.find(c=>c.id===unit.cardId) || { name: unit.cardName, img: '' };
+      const el = document.createElement('div'); el.className = 'unit-card'; el.dataset.uid = unit.uid;
+      const cached = imageCache[cardInfo.id];
+      const src = (cached && cached.src) ? cached.src : cardInfo.img;
+      el.innerHTML = `
+        <img src="${src}" alt="${cardInfo.name}">
+        <div style="display:flex;gap:8px;align-items:center;">
+          <div style="flex:1;font-size:14px;font-weight:700">${cardInfo.name}</div>
+        </div>
+        <div class="unit-title">升級</div>
+        <div class="upgrades"></div>
+        <div class="unit-actions"></div>
+      `;
+      const upgradesContainer = el.querySelector('.upgrades');
+      UPGRADES.forEach(up=>{
+        const btn = document.createElement('button');
+        btn.className = 'upgrade-btn' + (unit.upgrades.has(up.key) ? ' active' : '');
+        btn.textContent = up.label;
+        btn.dataset.uid = unit.uid;
+        btn.dataset.upkey = up.key;
+        btn.addEventListener('click', ()=> toggleUnitUpgrade(unit.uid, up.key));
+        upgradesContainer.appendChild(btn);
+      });
+      const actionsContainer = el.querySelector('.unit-actions');
+      if(!unit.isLeader){
+        const removeBtn = document.createElement('button'); removeBtn.className = 'btn-small'; removeBtn.textContent = '移除單位';
+        removeBtn.dataset.uid = unit.uid; removeBtn.addEventListener('click', (e)=> removeUnitByUid(e.currentTarget.dataset.uid));
+        actionsContainer.appendChild(removeBtn);
+      } else {
+        const info = document.createElement('div'); info.style.opacity = '0.85'; info.style.fontSize = '13px';
+        info.textContent = '領主（自動加入，可升級）'; actionsContainer.appendChild(info);
+      }
+      selectedUnitsEl.appendChild(el);
+    });
+    updateSelectedCount();
+  }
+
+  function toggleUnitUpgrade(uid, upkey){
+    const unit = units.find(u=>u.uid===uid); if(!unit) return;
+    const up = UPGRADES.find(x=>x.key===upkey); if(!up) return;
+    if(unit.upgrades.has(upkey)){ unit.upgrades.delete(upkey); unit.upgradesCost -= up.cost; usedBudget -= up.cost; if(usedBudget < 0) usedBudget = 0; }
+    else { if(usedBudget + up.cost > MAX_BUDGET){ remainingBudgetEl.classList.add('flash'); setTimeout(()=> remainingBudgetEl.classList.remove('flash'),360); return; } unit.upgrades.add(upkey); unit.upgradesCost += up.cost; usedBudget += up.cost; }
+    updateBudgetDisplay(); renderSelectedUnits(); updatePlusButtonsState();
+  }
+
+  function removeUnitByUid(uid){
+    const idx = units.findIndex(u=>u.uid===uid); if(idx === -1) return;
+    const unit = units[idx]; if(unit.isLeader){ alert('領主為固定單位，無法移除。'); return; }
+    units.splice(idx,1);
+    const cardInfo = campCards.find(c=>c.id===unit.cardId);
+    if(cardInfo){ usedBudget -= (cardInfo.cost + unit.upgradesCost); if(usedBudget < 0) usedBudget = 0; const cur = lineupCounts.get(unit.cardId) || 0; lineupCounts.set(unit.cardId, Math.max(0, cur - 1)); }
+    else { usedBudget -= unit.upgradesCost; if(usedBudget < 0) usedBudget = 0; }
+    updateBudgetDisplay(); renderLineupGallery();
+  }
+
+  function updatePlusButtonsState(){
+    lineupGallery.querySelectorAll('.sub-card').forEach(cardEl=>{
+      const id = cardEl.dataset.cardId; const info = campCards.find(c=>c.id===id);
+      if(!info || info.isLeader) return;
+      const plusBtn = cardEl.querySelector('.count-controls button:nth-child(3)');
+      const current = lineupCounts.get(id) || 0;
+      if((usedBudget + info.cost > MAX_BUDGET) || (current >= info.maxCopies)) plusBtn.disabled = true; else plusBtn.disabled = false;
+    });
+  }
+
+  function updateBudgetDisplay(){ const remaining = Math.max(0, MAX_BUDGET - usedBudget); remainingBudgetEl.textContent = remaining; remainingBudgetEl.className = 'value'; if(remaining === 0) remainingBudgetEl.classList.add('over'); }
+  function updateSelectedCount(){ selectedCountEl.textContent = units.length; }
+
+  // ---------------------------
+  // Export: draw images with containment and fixed image boxes (no cropping, no overlap)
+  // ---------------------------
+  async function exportDeckAsImage(deckName, tactics){
+    const scaleFactor = 2;
+    const baseW = 1200;
+    const padding = 24;
+    const cardsPerRow = 6;
+
+    // fixed image box sizes (same for every small card)
+    const cardImageW =  (Math.floor((baseW - padding*2 - (cardsPerRow-1)*12)/cardsPerRow)); // width of card box
+    const cardImageH = 90; // height reserved for the image area (keeps uniform size)
+    const labelH = 20; // label area under image
+    const cardBoxH = cardImageH + labelH + 6; // total row height per card (consistent)
+
+`
+
