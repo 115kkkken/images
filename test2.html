@@ -283,10 +283,22 @@
     { id:'B_3', name:'前線增援', cost:3, maxCopies:1, img: imgForId('B_3') }
   ];
 
-  const cCards = Array.from({length:14}, (_,i)=>({
-    id:`C_${i+1}`, name:`C 卡 ${i+1}`, cost: (i%5)+1, maxCopies: (i%4)+2,
-    img: imgForId(`C_${i+1}`)
-  }));
+  const cCards = [
+    { id:'c_1', name:'戰術支援', cost:3, maxCopies:3, img: imgForId('C_1') },
+    { id:'c_2', name:'補給運營', cost:1, maxCopies:3, img: imgForId('C_2') },
+    { id:'c_3', name:'前線增援', cost:2, maxCopies:3, img: imgForId('C_3') },
+    { id:'c_4', name:'前線增援', cost:2, maxCopies:3, img: imgForId('C_4') },
+    { id:'c_5', name:'前線增援', cost:3, maxCopies:2, img: imgForId('C_5') },
+    { id:'c_6', name:'前線增援', cost:1, maxCopies:3, img: imgForId('C_6') },
+    { id:'c_7', name:'前線增援', cost:1, maxCopies:3, img: imgForId('C_7') },
+    { id:'c_8', name:'前線增援', cost:5, maxCopies:3, img: imgForId('C_8') },
+    { id:'c_9', name:'前線增援', cost:0, maxCopies:2, img: imgForId('C_9') },
+    { id:'c_10', name:'前線增援', cost:2, maxCopies:3, img: imgForId('C_10') },
+    { id:'c_11', name:'前線增援', cost:2, maxCopies:3, img: imgForId('C_11') },
+    { id:'c_12', name:'前線增援', cost:4, maxCopies:3, img: imgForId('C_12') },
+    { id:'c_13', name:'前線增援', cost:0, maxCopies:1, img: imgForId('C_13') },
+    { id:'c_14', name:'前線增援', cost:0, maxCopies:1, img: imgForId('C_14') },
+  ];
 
   // STATE
   let chosenLeaderId = null;
@@ -931,3 +943,4 @@
 </script>
 </body>
 </html>
+
