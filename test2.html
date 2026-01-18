@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>勝者為王 - 牌組構築器</title>
+  <title>混沌異域</title>
   <style>
     :root{
       --topbar-height:64px;
@@ -124,11 +124,11 @@
   </div>
 
   <div class="container">
-    <h1>勝者為王 - 牌組構築器</h1>
+    <h1>混沌異域</h1>
 
     <div class="stage-tabs" role="tablist" aria-label="階段切換">
       <button id="tabCamp" class="active">大本營牌庫</button>
-      <button id="tabLineup">先發陣容</button>
+      <button id="tabLineup">軍表</button>
     </div>
 
     <!-- CAMP -->
@@ -136,32 +136,32 @@
       <div class="panel">
         <div class="section-title">選擇領主</div>
         <div class="leaders" id="leadersList"></div>
-        <div class="hint">選領主會自動把該類型的 A 卡加入大本營。可額外從其他兩類 A 卡中選 2 張。B 卡 3 張（任意）。C 卡最多選 2 種。最終確認先發時，已選擇的先發單位（包含領主）須為 7~10 張。</div>
+        
       </div>
 
       <div style="height:12px;"></div>
 
       <div class="grid">
         <div class="col panel">
-          <div class="section-title">A 卡（同領主類型自動加入 / 其他類型最多可選 2 張）</div>
+          <div class="section-title">同種族單位（同領主類型自動加入 / 其他種族最多可選 2 張）</div>
           <div id="aCardsArea" class="card-list"></div>
           <div class="hint" id="aLimitHint"></div>
         </div>
 
         <div class="col panel">
-          <div class="section-title">B 卡（任意選，現在 3 張）</div>
+          <div class="section-title">英雄單位</div>
           <div id="bCardsArea" class="card-list"></div>
         </div>
 
         <div class="col panel">
-          <div class="section-title">C 卡（請選擇最多 2 種）</div>
+          <div class="section-title">中立卡（最多 2 種）</div>
           <div id="cCardsArea" class="card-list"></div>
           <div class="hint" id="cLimitHint"></div>
         </div>
       </div>
       <div class="page">
       <div class="footer-actions">
-        <button class="btn-primary" id="enterLineupBtn">建立大本營並進入先發陣容</button>
+        <button class="btn-primary" id="enterLineupBtn">建立大本營</button>
         
         <button class="btn-ghost" id="resetCampBtn">重置大本營</button>
       </div>
@@ -170,22 +170,22 @@
     <!-- LINEUP -->
     <div id="lineupStage" style="display:none;">
       <div class="panel">
-        <div class="section-title">先發陣容 (from 大本營)</div>
-        <div id="lineupHint" class="hint">點 + 增加一個單位，並在下方為該單位選擇升級。領主會自動加入並可升級。確認先發時，已選單位（含領主）數量須為 7~10 張。</div>
+        <div class="section-title">構件軍表 (起始場上單位)</div>
+        
         <div id="lineupGallery" class="sub-gallery"></div>
 
         <!-- Selected units area (shows chosen units bottom of page) -->
         <div class="selected-units-wrap">
-          <div class="section-title" style="margin-top:12px;">已選擇的先發單位（可為單位加裝升級）</div>
+          <div class="section-title" style="margin-top:12px;">已選擇的單位(場上起始單位)</div>
           <div id="selectedUnits" class="selected-units"></div>
         </div>
 
       </div>
 
       <div class="footer-actions" style="margin-top:14px;">
-        <button class="btn-primary" id="confirmBtn">確認先發陣容</button>
+        <button class="btn-primary" id="confirmBtn">確認軍表</button>
         <button class="btn-ghost" id="backToCampBtn">返回編輯大本營</button>
-        <button class="btn-ghost" id="clearLineupBtn">重置先發構築</button>
+        <button class="btn-ghost" id="clearLineupBtn">重置軍表構築</button>
       </div>
     </div>
 
@@ -241,8 +241,8 @@
   }
 
   const leaders = [
-    { id:'L_D_A', name:'惡魔 領主 A', type:'demon', img: imgForId('L_D_A') },
-    { id:'L_D_B', name:'惡魔 領主 B', type:'demon', img: imgForId('L_D_B') },
+    { id:'L_D_A', name:'吞噬者 薩坦', type:'demon', img: imgForId('L_D_A') },
+    { id:'L_D_B', name:'深淵魔王 薩坦', type:'demon', img: imgForId('L_D_B') },
     { id:'L_T_A', name:'古墓 領主 A', type:'tomb',  img: imgForId('L_T_A') },
     { id:'L_T_B', name:'古墓 領主 B', type:'tomb',  img: imgForId('L_T_B') },
     { id:'L_N_A', name:'幽冥 領主 A', type:'nether', img: imgForId('L_N_A') },
@@ -251,16 +251,17 @@
 
   const aCardsByType = {
     demon: [
-      { id:'A_DE_1', name:'魔力使者', cost:8, maxCopies:2, img: imgForId('A_DE_1') },
-      { id:'A_DE_2', name:'暗影勇士', cost:6, maxCopies:2, img: imgForId('A_DE_2') },
-      { id:'A_DE_3', name:'淵能術者', cost:3, maxCopies:2, img: imgForId('A_DE_3') },
-      { id:'A_DE_4', name:'饕餮喚靈', cost:1, maxCopies:3, img: imgForId('A_DE_4') },
-      { id:'A_DE_5', name:'惡靈騎士', cost:4, maxCopies:3, img: imgForId('A_DE_5') },
-      { id:'A_DE_6', name:'腐化先鋒', cost:3, maxCopies:1, img: imgForId('A_DE_6') },
-      { id:'A_DE_7', name:'地獄火焰', cost:3, maxCopies:1, img: imgForId('A_DE_7') },
-      { id:'A_DE_8', name:'腐化先鋒', cost:3, maxCopies:1, img: imgForId('A_DE_8') },
-      { id:'A_DE_9', name:'腐化先鋒', cost:3, maxCopies:1, img: imgForId('A_DE_9') },
-      { id:'A_DE_10', name:'腐化先鋒', cost:3, maxCopies:1, img: imgForId('A_DE_10') }
+      { id:'A_DE_1', name:'末日炎魔', cost:8, maxCopies:2, img: imgForId('A_DE_1') },
+      { id:'A_DE_2', name:'地獄火重砲', cost:6, maxCopies:2, img: imgForId('A_DE_2') },
+      { id:'A_DE_3', name:'天起騎士', cost:3, maxCopies:2, img: imgForId('A_DE_3') },
+      { id:'A_DE_4', name:'惡魔之子', cost:1, maxCopies:3, img: imgForId('A_DE_4') },
+      { id:'A_DE_5', name:'剝皮三頭犬', cost:4, maxCopies:3, img: imgForId('A_DE_5') },
+      { id:'A_DE_6', name:'惡魔軍團', cost:3, maxCopies:1, img: imgForId('A_DE_6') },
+      { id:'A_DE_7', name:'惡魔軍團', cost:3, maxCopies:1, img: imgForId('A_DE_7') },
+      { id:'A_DE_8', name:'惡魔軍團', cost:3, maxCopies:1, img: imgForId('A_DE_8') },
+      { id:'A_DE_9', name:'惡魔軍團', cost:3, maxCopies:1, img: imgForId('A_DE_9') },
+      { id:'A_DE_10', name:'惡魔軍團', cost:3, maxCopies:1, img: imgForId('A_DE_10') },
+      { id:'A_DE_11', name:'天尊魔君 薩坦(不可選取)', cost:0, maxCopies:0, img: imgForId('A_DE_11') }
     ],
     tomb: [
       { id:'A_TO_1', name:'墓園守衛', cost:3, maxCopies:3, img: imgForId('A_TO_1') },
@@ -280,7 +281,7 @@
   };
 
   const bCards = [
-    { id:'B_1', name:'戰術支援', cost:2, maxCopies:1, img: imgForId('B_1') },
+    { id:'B_1', name:'煉獄術士 路西法', cost:2, maxCopies:1, img: imgForId('B_1') },
     { id:'B_2', name:'補給運營', cost:9, maxCopies:1, img: imgForId('B_2') },
     { id:'B_3', name:'前線增援', cost:3, maxCopies:1, img: imgForId('B_3') }
   ];
@@ -945,6 +946,7 @@
 </script>
 </body>
 </html>
+
 
 
 
