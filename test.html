@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>勝者為王 - 牌組構築器</title>
+  <title>混沌異域</title>
   <style>
     :root{
       --topbar-height:64px;
@@ -12,6 +12,7 @@
       --panel: rgba(255,255,255,0.03);
     }
     html,body{height:100%;margin:0;background:var(--bg);color:#eee;font-family:system-ui,-apple-system,Segoe UI,Roboto,"Noto Sans",Arial;}
+  
     .topbar{
       position:fixed; left:0; right:0; top:0; height:var(--topbar-height);
       display:flex; align-items:center; justify-content:center; gap:22px;
@@ -38,7 +39,7 @@
     .section-title{font-weight:700;margin-bottom:8px;color:#cfe8ff;}
     .card-list{display:flex;flex-wrap:wrap;gap:10px;}
     .card-item{width:calc(33.333% - 8px); min-width:140px; background:rgba(255,255,255,0.02); padding:8px; border-radius:8px; border:1px solid rgba(255,255,255,0.03); box-sizing:border-box;}
-    .card-item img{width:100%; border-radius:6px; display:block; height:140px; object-fit:cover;}
+    .card-item img{width:100%; border-radius:6px; display:block; height:140px; object-fit:cover; cursor:zoom-in;}
     .card-meta{display:flex;justify-content:space-between;align-items:center;margin-top:6px;font-size:13px;}
     .card-meta .small{opacity:.9;}
     .card-controls{display:flex;align-items:center;gap:8px;margin-top:8px;justify-content:center;}
@@ -46,7 +47,7 @@
     .card-controls input[type="checkbox"]{transform:scale(1.1);}
     .sub-gallery{display:flex;flex-wrap:wrap;gap:12px;margin-top:12px;justify-content:center;}
     .sub-card{width:calc(20% - 12px);min-width:140px;background:rgba(255,255,255,0.02);border-radius:8px;padding:8px;box-sizing:border-box;border:1px solid rgba(255,255,255,0.03);}
-    .sub-card img{width:100%;border-radius:6px; display:block; height:120px; object-fit:cover;}
+    .sub-card img{width:100%;border-radius:6px; display:block; height:120px; object-fit:cover; cursor:zoom-in;}
     .card-cost{color:#9ae6b4;font-weight:700;margin-top:6px;}
     .card-max{margin-top:4px;color:#cfe8ff;opacity:.9;font-size:13px;}
     .count{min-width:36px;text-align:center;font-weight:700;}
@@ -56,7 +57,7 @@
     .selected-units-wrap{margin-top:18px;}
     .selected-units{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin-top:8px;}
     .unit-card{width:calc(20% - 12px);min-width:160px;background:rgba(255,255,255,0.02);border-radius:8px;padding:8px;box-sizing:border-box;border:1px solid rgba(255,255,255,0.03);}
-    .unit-card img{width:100%;border-radius:6px; display:block; height:120px; object-fit:cover;}
+    .unit-card img{width:100%;border-radius:6px; display:block; height:120px; object-fit:cover; cursor:zoom-in;}
     .unit-card .unit-title{font-weight:700;margin-top:6px;}
     .upgrades{display:flex;flex-direction:column;gap:6px;margin-top:8px;}
     .upgrade-btn{padding:6px 8px;border-radius:6px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:var(--accent);cursor:pointer;}
@@ -75,6 +76,34 @@
     @media (max-width:900px){ .card-item{width:calc(50% - 8px);} .sub-card{width:calc(33.333% - 12px);} .leader{width:45%;} .unit-card{width:calc(33.333% - 12px);} }
     @media (max-width:520px){ .card-item{width:100%;} .sub-card{width:calc(50% - 12px);} .leader{width:100%;} .unit-card{width:calc(50% - 12px);} }
     .flash{animation:flash 360ms ease;} @keyframes flash{0%{box-shadow:none;}40%{box-shadow:0 0 10px rgba(255,0,0,0.6);}100%{box-shadow:none;}}
+
+    /* ---------- Image zoom (lightbox) styles (use left/top/width/height animation for sharpness) ---------- */
+    .img-zoom-backdrop{
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,0.75);
+      z-index:12000;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      pointer-events:auto;
+      opacity:0;
+      transition:opacity .28s ease;
+    }
+    .img-zoom-backdrop.show{opacity:1;}
+    .img-zoom-clone{
+      position:fixed;
+      z-index:12001;
+      border-radius:10px;
+      box-shadow:0 30px 80px rgba(0,0,0,0.7);
+      transition:left .34s cubic-bezier(.2,.9,.25,1), top .34s cubic-bezier(.2,.9,.25,1), width .34s cubic-bezier(.2,.9,.25,1), height .34s cubic-bezier(.2,.9,.25,1);
+      cursor:zoom-out;
+      background:transparent;
+      overflow:hidden;
+      will-change:left,top,width,height;
+    }
+    .img-zoom-clone img{ width:100%; height:100%; object-fit:contain; display:block; pointer-events:none; user-select:none; }
+    body.img-zoom-open { touch-action: none; user-select: none; -webkit-user-select:none; }
   </style>
 </head>
 <body>
@@ -95,11 +124,11 @@
   </div>
 
   <div class="container">
-    <h1>勝者為王 - 牌組構築器</h1>
+    <h1>混沌異域</h1>
 
     <div class="stage-tabs" role="tablist" aria-label="階段切換">
       <button id="tabCamp" class="active">大本營牌庫</button>
-      <button id="tabLineup">先發陣容</button>
+      <button id="tabLineup">軍表</button>
     </div>
 
     <!-- CAMP -->
@@ -107,55 +136,56 @@
       <div class="panel">
         <div class="section-title">選擇領主</div>
         <div class="leaders" id="leadersList"></div>
-        <div class="hint">選領主會自動把該類型的 A 卡加入大本營。可額外從其他兩類 A 卡中選 2 張。B 卡 3 張（任意）。C 卡最多選 2 種。</div>
+        
       </div>
 
       <div style="height:12px;"></div>
 
       <div class="grid">
         <div class="col panel">
-          <div class="section-title">A 卡（同領主類型自動加入 / 其他類型最多可選 2 張）</div>
+          <div class="section-title">同種族單位（同領主類型自動加入 / 其他種族最多可選 2 張）</div>
           <div id="aCardsArea" class="card-list"></div>
           <div class="hint" id="aLimitHint"></div>
         </div>
 
         <div class="col panel">
-          <div class="section-title">B 卡（任意選，現在 3 張）</div>
+          <div class="section-title">英雄單位</div>
           <div id="bCardsArea" class="card-list"></div>
         </div>
 
         <div class="col panel">
-          <div class="section-title">C 卡（請選擇最多 2 種）</div>
+          <div class="section-title">中立卡（最多 2 種）</div>
           <div id="cCardsArea" class="card-list"></div>
           <div class="hint" id="cLimitHint"></div>
         </div>
       </div>
-
+      <div class="page">
       <div class="footer-actions">
-        <button class="btn-primary" id="enterLineupBtn">建立大本營並進入先發陣容</button>
+        <button class="btn-primary" id="enterLineupBtn">建立大本營</button>
+        
         <button class="btn-ghost" id="resetCampBtn">重置大本營</button>
       </div>
     </div>
-
+    </div>
     <!-- LINEUP -->
     <div id="lineupStage" style="display:none;">
       <div class="panel">
-        <div class="section-title">先發陣容 (from 大本營)</div>
-        <div id="lineupHint" class="hint">點 + 增加一個單位，並在下方為該單位選擇升級。領主會自動加入並可升級。</div>
+        <div class="section-title">構件軍表 (起始場上單位)</div>
+        
         <div id="lineupGallery" class="sub-gallery"></div>
 
         <!-- Selected units area (shows chosen units bottom of page) -->
         <div class="selected-units-wrap">
-          <div class="section-title" style="margin-top:12px;">已選擇的先發單位（可為單位加裝升級）</div>
+          <div class="section-title" style="margin-top:12px;">已選擇的單位(場上起始單位)</div>
           <div id="selectedUnits" class="selected-units"></div>
         </div>
 
       </div>
 
       <div class="footer-actions" style="margin-top:14px;">
-        <button class="btn-primary" id="confirmBtn">確認先發陣容</button>
+        <button class="btn-primary" id="confirmBtn">確認軍表</button>
         <button class="btn-ghost" id="backToCampBtn">返回編輯大本營</button>
-        <button class="btn-ghost" id="clearLineupBtn">重置先發構築</button>
+        <button class="btn-ghost" id="clearLineupBtn">重置軍表構築</button>
       </div>
     </div>
 
@@ -211,33 +241,34 @@
   }
 
   const leaders = [
-    { id:'L_D_A', name:'惡魔 領主 A', type:'demon', img: imgForId('L_D_A') },
-    { id:'L_D_B', name:'惡魔 領主 B', type:'demon', img: imgForId('L_D_B') },
-    { id:'L_T_A', name:'古墓 領主 A', type:'tomb',  img: imgForId('L_T_A') },
-    { id:'L_T_B', name:'古墓 領主 B', type:'tomb',  img: imgForId('L_T_B') },
+    { id:'L_D_A', name:'吞噬者 薩坦', type:'demon', img: imgForId('L_D_A') },
+    { id:'L_D_B', name:'深淵魔王 薩坦', type:'demon', img: imgForId('L_D_B') },
+    { id:'L_T_A', name:'古墓領主 圖特摩斯', type:'tomb',  img: imgForId('L_T_A') },
+    { id:'L_T_B', name:'不巧大帝 圖特摩斯', type:'tomb',  img: imgForId('L_T_B') },
     { id:'L_N_A', name:'幽冥 領主 A', type:'nether', img: imgForId('L_N_A') },
     { id:'L_N_B', name:'幽冥 領主 B', type:'nether', img: imgForId('L_N_B') }
   ];
 
   const aCardsByType = {
     demon: [
-      { id:'A_DE_1', name:'魔力使者', cost:8, maxCopies:2, img: imgForId('A_DE_1') },
-      { id:'A_DE_2', name:'暗影勇士', cost:6, maxCopies:2, img: imgForId('A_DE_2') },
-      { id:'A_DE_3', name:'淵能術者', cost:3, maxCopies:2, img: imgForId('A_DE_3') },
-      { id:'A_DE_4', name:'饕餮喚靈', cost:1, maxCopies:3, img: imgForId('A_DE_4') },
-      { id:'A_DE_5', name:'惡靈騎士', cost:4, maxCopies:3, img: imgForId('A_DE_5') },
-      { id:'A_DE_6', name:'腐化先鋒', cost:3, maxCopies:1, img: imgForId('A_DE_6') },
-      { id:'A_DE_7', name:'地獄火焰', cost:3, maxCopies:1, img: imgForId('A_DE_7') },
-      { id:'A_DE_8', name:'腐化先鋒', cost:3, maxCopies:1, img: imgForId('A_DE_8') },
-      { id:'A_DE_9', name:'腐化先鋒', cost:3, maxCopies:1, img: imgForId('A_DE_9') },
-      { id:'A_DE_10', name:'腐化先鋒', cost:3, maxCopies:1, img: imgForId('A_DE_10') }
+      { id:'A_DE_1', name:'末日炎魔', cost:8, maxCopies:2, img: imgForId('A_DE_1') },
+      { id:'A_DE_2', name:'地獄火重砲', cost:6, maxCopies:2, img: imgForId('A_DE_2') },
+      { id:'A_DE_3', name:'天起騎士', cost:3, maxCopies:2, img: imgForId('A_DE_3') },
+      { id:'A_DE_4', name:'惡魔之子', cost:1, maxCopies:3, img: imgForId('A_DE_4') },
+      { id:'A_DE_5', name:'剝皮三頭犬', cost:4, maxCopies:3, img: imgForId('A_DE_5') },
+      { id:'A_DE_6', name:'惡魔軍團', cost:3, maxCopies:1, img: imgForId('A_DE_6') },
+      { id:'A_DE_7', name:'惡魔軍團', cost:3, maxCopies:1, img: imgForId('A_DE_7') },
+      { id:'A_DE_8', name:'惡魔軍團', cost:3, maxCopies:1, img: imgForId('A_DE_8') },
+      { id:'A_DE_9', name:'惡魔軍團', cost:3, maxCopies:1, img: imgForId('A_DE_9') },
+      { id:'A_DE_10', name:'惡魔軍團', cost:3, maxCopies:1, img: imgForId('A_DE_10') },
+      { id:'A_DE_11', name:'天尊魔君 薩坦(不可選取)', cost:0, maxCopies:0, img: imgForId('A_DE_11') }
     ],
     tomb: [
-      { id:'A_TO_1', name:'墓園守衛', cost:3, maxCopies:3, img: imgForId('A_TO_1') },
-      { id:'A_TO_2', name:'骷髏領主', cost:5, maxCopies:3, img: imgForId('A_TO_2') },
-      { id:'A_TO_3', name:'腐骨弓手', cost:4, maxCopies:3, img: imgForId('A_TO_3') },
-      { id:'A_TO_4', name:'陵衛戰士', cost:1, maxCopies:5, img: imgForId('A_TO_4') },
-      { id:'A_TO_5', name:'古殿祭者', cost:1, maxCopies:5, img: imgForId('A_TO_5') }
+      { id:'A_TO_1', name:'哀嚎戰車', cost:3, maxCopies:3, img: imgForId('A_TO_1') },
+      { id:'A_TO_2', name:'殺戳 斯芬克斯', cost:5, maxCopies:3, img: imgForId('A_TO_2') },
+      { id:'A_TO_3', name:'阿努比斯衛隊', cost:4, maxCopies:3, img: imgForId('A_TO_3') },
+      { id:'A_TO_4', name:'骸骨守衛', cost:1, maxCopies:5, img: imgForId('A_TO_4') },
+      { id:'A_TO_5', name:'屍鴉', cost:1, maxCopies:5, img: imgForId('A_TO_5') }
       
     ],
     nether: [
@@ -250,15 +281,27 @@
   };
 
   const bCards = [
-    { id:'B_1', name:'戰術支援', cost:2, maxCopies:1, img: imgForId('B_1') },
-    { id:'B_2', name:'補給運營', cost:9, maxCopies:1, img: imgForId('B_2') },
+    { id:'B_1', name:'煉獄術士 路西法', cost:2, maxCopies:1, img: imgForId('B_1') },
+    { id:'B_2', name:'冰霜巨龍 賽特拉', cost:9, maxCopies:1, img: imgForId('B_2') },
     { id:'B_3', name:'前線增援', cost:3, maxCopies:1, img: imgForId('B_3') }
   ];
 
-  const cCards = Array.from({length:14}, (_,i)=>({
-    id:`C_${i+1}`, name:`C 卡 ${i+1}`, cost: (i%5)+1, maxCopies: (i%4)+2,
-    img: imgForId(`C_${i+1}`)
-  }));
+  const cCards = [
+    { id:'c_1', name:'鈦晶加工器', cost:3, maxCopies:3, img: imgForId('C_1') },
+    { id:'c_2', name:'鐵刺傭兵團', cost:1, maxCopies:3, img: imgForId('C_2') },
+    { id:'c_3', name:'矮人護衛', cost:2, maxCopies:3, img: imgForId('C_3') },
+    { id:'c_4', name:'復仇之魂', cost:2, maxCopies:3, img: imgForId('C_4') },
+    { id:'c_5', name:'外交使節', cost:3, maxCopies:2, img: imgForId('C_5') },
+    { id:'c_6', name:'哨塔工程兵', cost:1, maxCopies:3, img: imgForId('C_6') },
+    { id:'c_7', name:'貪欲魅妖', cost:1, maxCopies:3, img: imgForId('C_7') },
+    { id:'c_8', name:'猛馬戰象', cost:5, maxCopies:3, img: imgForId('C_8') },
+    { id:'c_9', name:'奴隸動員兵團', cost:0, maxCopies:2, img: imgForId('C_9') },
+    { id:'c_10', name:'烏拉標騎團', cost:2, maxCopies:3, img: imgForId('C_10') },
+    { id:'c_11', name:'血瘟鼠群', cost:2, maxCopies:3, img: imgForId('C_11') },
+    { id:'c_12', name:'嗜血液叉', cost:4, maxCopies:3, img: imgForId('C_12') },
+    { id:'c_13', name:'聰慧戰略家 漢尼拔', cost:0, maxCopies:1, img: imgForId('C_13') },
+    { id:'c_14', name:'烈火龍王', cost:0, maxCopies:1, img: imgForId('C_14') },
+  ];
 
   // STATE
   let chosenLeaderId = null;
@@ -291,7 +334,140 @@
   remainingBudgetEl.textContent = MAX_BUDGET;
   selectedCountEl.textContent = 0;
 
-  // Rendering & logic (same as before)...
+  // ---------- Image zoom state ----------
+  let currentZoom = null; // { backdropEl, cloneEl, originalRect, originalImgEl }
+  let escKeyListener = null;
+
+  // find imageCache entry by matching src
+  function findCacheEntryBySrc(src){
+    for(const id in imageCache){
+      const img = imageCache[id];
+      if(!img) continue;
+      if(img.src === src) return { id, img };
+    }
+    return null;
+  }
+
+  function openImageZoomFromElement(imgEl){
+    if(!imgEl) return;
+    const src = imgEl.src || imgEl.getAttribute('src');
+    if(!src) return;
+    if(currentZoom) { closeImageZoom(); return; }
+
+    const rect = imgEl.getBoundingClientRect();
+    const vw = Math.max(document.documentElement.clientWidth, window.innerWidth || 0);
+    const vh = Math.max(document.documentElement.clientHeight, window.innerHeight || 0);
+
+    // try to get full-size natural dimensions from imageCache if possible
+    const cacheEntry = findCacheEntryBySrc(src);
+    const naturalW = (cacheEntry && cacheEntry.img && cacheEntry.img.naturalWidth) ? cacheEntry.img.naturalWidth : (imgEl.naturalWidth || rect.width);
+    const naturalH = (cacheEntry && cacheEntry.img && cacheEntry.img.naturalHeight) ? cacheEntry.img.naturalHeight : (imgEl.naturalHeight || rect.height);
+    const highResSrc = (cacheEntry && cacheEntry.img && cacheEntry.img.src) ? cacheEntry.img.src : src;
+
+    // create backdrop & clone
+    const backdrop = document.createElement('div');
+    backdrop.className = 'img-zoom-backdrop';
+    backdrop.setAttribute('role','dialog');
+    backdrop.setAttribute('aria-modal','true');
+    backdrop.tabIndex = -1;
+
+    const clone = document.createElement('div');
+    clone.className = 'img-zoom-clone';
+    // initial geometry: same as source rect (viewport coordinates)
+    clone.style.left = rect.left + 'px';
+    clone.style.top = rect.top + 'px';
+    clone.style.width = rect.width + 'px';
+    clone.style.height = rect.height + 'px';
+
+    // inner high-res image
+    const inner = document.createElement('img');
+    inner.alt = imgEl.alt || '';
+    inner.src = highResSrc;
+    clone.appendChild(inner);
+
+    document.body.appendChild(backdrop);
+    document.body.appendChild(clone);
+    document.body.classList.add('img-zoom-open');
+    // prevent body scrolling while open
+    document.body.style.overflow = 'hidden';
+
+    // compute target size while preserving aspect ratio, but do NOT upscale beyond natural size
+    const maxW = vw * 0.96; // leave small margin
+    const maxH = vh * 0.94;
+    // start with natural size bounded by maxW/maxH
+    let targetW = Math.min(naturalW, maxW);
+    let targetH = naturalH * (targetW / naturalW);
+    if(targetH > maxH){
+      targetH = maxH;
+      targetW = naturalW * (targetH / naturalH);
+      if(targetW > naturalW) targetW = naturalW;
+    }
+    // center target position in viewport
+    const targetLeft = Math.round((vw - targetW) / 2);
+    const targetTop = Math.round((vh - targetH) / 2);
+
+    // animate (use left/top/width/height transitions for sharpness)
+    requestAnimationFrame(()=>{
+      backdrop.classList.add('show');
+      clone.style.left = targetLeft + 'px';
+      clone.style.top = targetTop + 'px';
+      clone.style.width = Math.round(targetW) + 'px';
+      clone.style.height = Math.round(targetH) + 'px';
+    });
+
+    function backdropClick(e){
+      if(e.target === backdrop) closeImageZoom();
+    }
+    backdrop.addEventListener('click', backdropClick);
+    clone.addEventListener('click', closeImageZoom);
+
+    escKeyListener = (ev) => { if(ev.key === 'Escape') closeImageZoom(); };
+    document.addEventListener('keydown', escKeyListener);
+
+    currentZoom = { backdropEl: backdrop, cloneEl: clone, originalRect: rect, originalImgEl: imgEl };
+  }
+
+  function closeImageZoom(){
+    if(!currentZoom) return;
+    const { backdropEl, cloneEl, originalRect } = currentZoom;
+    // animate back to original rect
+    cloneEl.style.left = originalRect.left + 'px';
+    cloneEl.style.top = originalRect.top + 'px';
+    cloneEl.style.width = originalRect.width + 'px';
+    cloneEl.style.height = originalRect.height + 'px';
+
+    backdropEl.classList.remove('show');
+
+    const cleanup = ()=>{
+      if(backdropEl && backdropEl.parentNode) backdropEl.parentNode.removeChild(backdropEl);
+      if(cloneEl && cloneEl.parentNode) cloneEl.parentNode.removeChild(cloneEl);
+      document.body.classList.remove('img-zoom-open');
+      document.body.style.overflow = '';
+      if(escKeyListener) document.removeEventListener('keydown', escKeyListener);
+      currentZoom = null;
+    };
+
+    const t = setTimeout(cleanup, 420);
+    cloneEl.addEventListener('transitionend', function te(){
+      clearTimeout(t);
+      cloneEl.removeEventListener('transitionend', te);
+      cleanup();
+    });
+  }
+
+  // Helper: add zoom handler to an <img> element (only for A/B/C cards and non-leader units)
+  function makeImgZoomable(imgEl){
+    if(!imgEl) return;
+    imgEl.style.cursor = 'zoom-in';
+    imgEl.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openImageZoomFromElement(imgEl);
+    });
+  }
+
+  // ---------------------------
+  // Rendering & logic
+  // ---------------------------
   function renderLeaders(){
     leadersList.innerHTML = '';
     leaders.forEach(ld=>{
@@ -301,6 +477,7 @@
       el.dataset.type = ld.type;
       el.tabIndex = 0;
       const src = (imageCache[ld.id] && imageCache[ld.id].src) ? imageCache[ld.id].src : ld.img;
+      // leaders are NOT zoomable per request
       el.innerHTML = `<img src="${src}" alt="${ld.name}"><div class="label">${ld.name}</div>`;
       el.addEventListener('click', ()=> chooseLeader(ld.id));
       el.addEventListener('keydown', e => { if(e.key==='Enter' || e.key===' ') { e.preventDefault(); chooseLeader(ld.id);} });
@@ -323,6 +500,8 @@
         <label for="${cbId}" style="margin-left:6px;color:#cfe8ff">${disabled? '自動加入' : '加入大本營'}</label>
       </div>
     `;
+    // Only A/B/C cards reach here (leaders handled separately), so it's OK to make zoomable
+    makeImgZoomable(el.querySelector('img'));
     if(!disabled && onToggle){
       const checkbox = el.querySelector('input[type=checkbox]');
       checkbox.addEventListener('change', ()=> onToggle(card));
@@ -405,6 +584,9 @@
       const wrap = document.createElement('div'); wrap.className = 'sub-card'; wrap.dataset.cardId = card.id;
       const cached = imageCache[card.id];
       const imgEl = document.createElement('img'); imgEl.src = (cached && cached.src) ? cached.src : card.img; imgEl.alt = card.name;
+      // Only make zoomable when NOT leader
+      if(!card.isLeader) makeImgZoomable(imgEl);
+
       const name = document.createElement('div'); name.className='card-name'; name.textContent = card.name;
       const cost = document.createElement('div'); cost.className='card-cost'; cost.textContent = `費用：${card.cost}`;
       const maxEl = document.createElement('div'); maxEl.className='card-max'; maxEl.textContent = `上限：${card.maxCopies} 張`;
@@ -472,6 +654,9 @@
         <div class="upgrades"></div>
         <div class="unit-actions"></div>
       `;
+      // Only non-leader unit images zoomable
+      if(!unit.isLeader) makeImgZoomable(el.querySelector('img'));
+
       const upgradesContainer = el.querySelector('.upgrades');
       UPGRADES.forEach(up=>{
         const btn = document.createElement('button');
@@ -675,6 +860,26 @@
     if(line) ctx.fillText(line, x, curY);
   }
 
+  // ---------------------------
+  // Notification modal for card count rule
+  // ---------------------------
+  function showCountNotification(message){
+    const backdrop = document.createElement('div'); backdrop.className = 'modal-backdrop';
+    const modal = document.createElement('div'); modal.className = 'modal';
+    modal.innerHTML = `
+      <h3>卡牌數量不符規定</h3>
+      <div style="color:#cfe8ff;margin-top:8px">${message}</div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;">
+        <button id="okCountNotify" class="btn-primary">好</button>
+      </div>
+    `;
+    backdrop.appendChild(modal);
+    document.body.appendChild(backdrop);
+    modal.querySelector('#okCountNotify').addEventListener('click', ()=> {
+      document.body.removeChild(backdrop);
+    });
+  }
+
   // Init and event wiring (same as previous)
   async function init(){
     document.getElementById('enterLineupBtn').disabled = true;
@@ -694,17 +899,34 @@
 
   document.getElementById('tabCamp').addEventListener('click', ()=> { tabCamp.classList.add('active'); tabLineup.classList.remove('active'); campStage.style.display = ''; lineupStage.style.display = 'none'; });
   document.getElementById('tabLineup').addEventListener('click', ()=> { tabLineup.classList.add('active'); tabCamp.classList.remove('active'); campStage.style.display = 'none'; lineupStage.style.display = ''; });
-  document.getElementById('enterLineupBtn').addEventListener('click', ()=> { if(!chosenLeaderId){ alert('請先選擇一位領主。'); return;} buildCampCardsFromSelections(); renderLineupGallery(); tabLineup.click(); });
+
+  // ENTER LINEUP: build camp -> lineup (no final-count check here)
+  document.getElementById('enterLineupBtn').addEventListener('click', ()=> {
+    if(!chosenLeaderId){ alert('請先選擇一位領主。'); return; }
+    buildCampCardsFromSelections();
+    renderLineupGallery();
+    tabLineup.click();
+  });
+
   document.getElementById('resetCampBtn').addEventListener('click', ()=> { if(!confirm('重置大本營會清除已選擇內容，確定嗎？')) return; resetCamp(); });
   document.getElementById('backToCampBtn').addEventListener('click', ()=> { tabCamp.click(); });
   document.getElementById('clearLineupBtn').addEventListener('click', ()=> { if(!confirm('重置先發將清除所有選擇數量與升級，確定嗎？')) return; const leaderUnit = units.find(u => u.isLeader); units.length = 0; if(leaderUnit) units.push(leaderUnit); lineupCounts.clear(); campCards.forEach(c => lineupCounts.set(c.id, c.isLeader ? 1 : 0)); usedBudget = 0; updateBudgetDisplay(); renderLineupGallery(); });
-  document.getElementById('confirmBtn').addEventListener('click', ()=> { openConfirmModal(); });
+
+  // CONFIRM: check selected units count (including leader) is 7~10 before opening confirm modal
+  document.getElementById('confirmBtn').addEventListener('click', ()=> {
+    const totalSelectedUnits = units.length; // includes leader if present
+    if(totalSelectedUnits < 7 || totalSelectedUnits > 10){
+      showCountNotification(`先發單位數量必須為 7 ~ 10 張（包含領主）。目前已選擇 ${totalSelectedUnits} 張。請調整後再確認。`);
+      return;
+    }
+    openConfirmModal();
+  });
 
   function openConfirmModal(){
     const backdrop = document.createElement('div'); backdrop.className = 'modal-backdrop';
     const modal = document.createElement('div'); modal.className = 'modal';
     modal.innerHTML = `
-      <h3>匯出先���陣容</h3>
+      <h3>匯出先發陣容</h3>
       <label>副牌組名稱：</label>
       <input id="deckName" type="text" placeholder="輸入牌組名稱">
       <label>戰術打法：</label>
@@ -724,4 +946,12 @@
 </script>
 </body>
 </html>
+
+
+
+
+
+
+
+
 
