@@ -11,7 +11,7 @@
       --bg:#0b0b0b;
       --panel: rgba(255,255,255,0.03);
     }
-    html,body{height:100%;margin:0;background:var(--bg);color:#eee;font-family:system-ui,-apple-system,Segoe UI,Roboto,"Noto Sans",Arial;}
+    html,body{min-height:100%;margin:0;background:var(--bg);color:#eee;font-family:system-ui,-apple-system,Segoe UI,Roboto,"Noto Sans",Arial;}
   
     .topbar{
       position:fixed; left:0; right:0; top:0; height:var(--topbar-height);
@@ -104,6 +104,13 @@
     }
     .img-zoom-clone img{ width:100%; height:100%; object-fit:contain; display:block; pointer-events:none; user-select:none; }
     body.img-zoom-open { touch-action: none; user-select: none; -webkit-user-select:none; }
+  .main{
+  padding-top: calc(var(--topbar-height) + 8px);
+  min-height: 100vh;
+  box-sizing: border-box;
+  overflow-y: auto;
+}
+
   </style>
 </head>
 <body>
@@ -131,6 +138,7 @@
       <button id="tabLineup">軍表</button>
     </div>
 
+    <div class="main">
     <!-- CAMP -->
     <div id="campStage">
       <div class="panel">
@@ -181,7 +189,7 @@
         </div>
 
       </div>
-
+    </div>
       <div class="footer-actions" style="margin-top:14px;">
         <button class="btn-primary" id="confirmBtn">確認軍表</button>
         <button class="btn-ghost" id="backToCampBtn">返回編輯大本營</button>
@@ -966,6 +974,7 @@ init();
 </script>
 </body>
 </html>
+
 
 
 
