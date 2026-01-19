@@ -723,83 +723,123 @@
   // ---------------------------
   // Export: draw images with containment and fixed image boxes (no cropping, no overlap)
   // ---------------------------
-  async function exportDeckAsImage(deckName, tactics){
-    const scaleFactor = 2;
+async function exportDeckAsImage(deckName, tactics){
+    const scaleFactor = 2; // 你原本的放大比例
+    const dpr = window.devicePixelRatio || 2; // 額外再乘一次 Retina 比例
+    const pixelRatio = scaleFactor * dpr;     // ← 核心：實際輸出倍率
+
     const baseW = 1200;
     const padding = 24;
     const cardsPerRow = 6;
 
-    // fixed image box sizes (same for every small card)
-    const cardImageW =  (Math.floor((baseW - padding*2 - (cardsPerRow-1)*12)/cardsPerRow)); // width of card box
-    const cardImageH = 90; // height reserved for the image area (keeps uniform size)
-    const labelH = 20; // label area under image
-    const cardBoxH = cardImageH + labelH + 6; // total row height per card (consistent)
+    // fixed image box sizes
+    const cardImageW = Math.floor((baseW - padding*2 - (cardsPerRow-1)*12) / cardsPerRow);
+    const cardImageH = 90;
+    const labelH = 20;
+    const cardBoxH = cardImageH + labelH + 6;
 
     const campRows = Math.ceil(campCards.length / cardsPerRow);
     const unitsPerRow = 4;
-    const unitImageW = Math.floor((baseW - padding*2 - (unitsPerRow-1)*12)/unitsPerRow);
-    const unitImageH = 110; // fixed unit image H
-    const unitBoxH = unitImageH + labelH + 14; // total unit box height
+    const unitImageW = Math.floor((baseW - padding*2 - (unitsPerRow-1)*12) / unitsPerRow);
+    const unitImageH = 110;
+    const unitBoxH = unitImageH + labelH + 14;
 
     const unitRows = Math.max(1, Math.ceil(units.length / unitsPerRow));
     const headerH = 120;
     const hBase = padding*2 + headerH + campRows*cardBoxH + 24 + unitRows*(unitBoxH + 20);
-    const canvasW = baseW * scaleFactor;
-    const canvasH = Math.max(600, Math.floor(hBase * scaleFactor));
+
+    // →「畫布邏輯尺寸」
+    const canvasW = baseW;
+    const canvasH = Math.max(600, Math.floor(hBase));
+
+    // →「實際輸出像素（高畫質）」
+    const outputW = canvasW * pixelRatio;
+    const outputH = canvasH * pixelRatio;
 
     const canvas = document.createElement('canvas');
-    canvas.width = canvasW; canvas.height = canvasH;
-    const ctx = canvas.getContext('2d');
-    ctx.scale(scaleFactor, scaleFactor);
+    canvas.width = outputW;
+    canvas.height = outputH;
 
-    // background & header
-    ctx.fillStyle = '#071018'; ctx.fillRect(0,0,baseW,canvasH/scaleFactor);
-    ctx.fillStyle = '#fff'; ctx.font = `700 28px sans-serif`; ctx.fillText(deckName, padding, padding + 28);
-    ctx.font = `14px sans-serif`; ctx.fillStyle = '#cfe8ff';
-    const tacticsLines = wrapText(ctx, tactics, baseW - padding*2);
+    const ctx = canvas.getContext('2d');
+
+    // Retina scale（非常重要）
+    ctx.scale(pixelRatio, pixelRatio);
+
+    //---------------------
+    // START DRAWING
+    //---------------------
+
+    ctx.fillStyle = '#071018';
+    ctx.fillRect(0,0,canvasW,canvasH);
+
+    // HEADER
+    ctx.fillStyle = '#fff';
+    ctx.font = `700 28px sans-serif`;
+    ctx.fillText(deckName, padding, padding + 28);
+
+    ctx.font = `14px sans-serif`;
+    ctx.fillStyle = '#cfe8ff';
+    const tacticsLines = wrapText(ctx, tactics, canvasW - padding*2);
     tacticsLines.forEach((ln,i)=> ctx.fillText(ln, padding, padding + 28 + (i+1)*18));
+
     const rem = Math.max(0, MAX_BUDGET - usedBudget);
     ctx.fillStyle = '#9ae6b4'; ctx.font = `600 14px sans-serif`;
-    ctx.fillText(`剩餘費用: ${rem}`, baseW - padding - 220, padding + 24);
-    ctx.fillText(`已選卡牌數量: ${units.length}`, baseW - padding - 220, padding + 44);
+    ctx.fillText(`剩餘費用: ${rem}`, canvasW - padding - 220, padding + 24);
+    ctx.fillText(`已選卡牌數量: ${units.length}`, canvasW - padding - 220, padding + 44);
 
-    // camp title
+    //---------------------
+    // CAMP CARDS
+    //---------------------
     let y = padding + headerH;
-    ctx.fillStyle = '#cfe8ff'; ctx.font = `600 16px sans-serif`; ctx.fillText('大本營牌庫', padding, y - 10);
+    ctx.fillStyle = '#cfe8ff'; ctx.font = `600 16px sans-serif`;
+    ctx.fillText('大本營牌庫', padding, y - 10);
 
-    // draw camp grid: each card uses fixed image box (cardImageW x cardImageH) and we CENTER and CONTAIN the original image into that box.
-    let cx = padding; let cy = y + 12; let col = 0;
-    campCards.forEach((c,i)=>{
-      const img = imageCache[c.id] || null;
-      // card background
-      ctx.fillStyle = 'rgba(255,255,255,0.02)'; ctx.fillRect(cx, cy, cardImageW, cardBoxH - 6);
-      // draw contained image centered inside (no cropping)
+    let cx = padding, cy = y + 12, col = 0;
+
+    campCards.forEach((c)=>{
+      const img = imageCache[c.id];
+      ctx.fillStyle = 'rgba(255,255,255,0.02)';
+      ctx.fillRect(cx, cy, cardImageW, cardBoxH - 6);
+
       if(img){
-        // clip to the image box area to ensure no overflow (defensive)
         ctx.save();
         ctx.beginPath();
         ctx.rect(cx, cy, cardImageW, cardImageH);
         ctx.clip();
         drawImageContain(ctx, img, cx, cy, cardImageW, cardImageH);
         ctx.restore();
-      } else {
-        ctx.fillStyle = 'rgba(255,255,255,0.01)'; ctx.fillRect(cx, cy, cardImageW, cardImageH);
-        ctx.fillStyle = '#ccc'; ctx.font = `12px sans-serif`; ctx.fillText('圖示無法載入', cx + 8, cy + (cardImageH/2));
       }
-      // name under image in reserved label area
-      ctx.fillStyle = '#fff'; ctx.font = `600 12px sans-serif`; ctx.fillText(c.name, cx + 6, cy + cardImageH + 14);
-      col++; cx += cardImageW + 12; if(col >= cardsPerRow){ col = 0; cx = padding; cy += cardBoxH; }
+
+      ctx.fillStyle = '#fff';
+      ctx.font = `600 12px sans-serif`;
+      ctx.fillText(c.name, cx + 6, cy + cardImageH + 14);
+
+      col++;
+      cx += cardImageW + 12;
+
+      if(col >= cardsPerRow){
+        col = 0;
+        cx = padding;
+        cy += cardBoxH;
+      }
     });
 
-    // units section
+    //---------------------
+    // UNITS
+    //---------------------
     let unitsY = cy + 130;
-    ctx.fillStyle = '#cfe8ff'; ctx.font = `600 16px sans-serif`; ctx.fillText('先發陣容與升級', padding, unitsY - 10);
+    ctx.fillStyle = '#cfe8ff'; ctx.font = `600 16px sans-serif`;
+    ctx.fillText('先發陣容與升級', padding, unitsY - 10);
 
-    let ux = padding; let uy = unitsY + 12;
+    let ux = padding, uy = unitsY + 12;
+
     units.forEach((u,i)=>{
-      const card = campCards.find(c=>c.id===u.cardId) || { name:u.cardName, img: '' };
-      const img = imageCache[card.id] || null;
-      ctx.fillStyle = 'rgba(255,255,255,0.02)'; ctx.fillRect(ux, uy, unitImageW, unitBoxH - 10);
+      const card = campCards.find(c=>c.id===u.cardId) || { name:u.cardName, img:'' };
+      const img = imageCache[card.id];
+
+      ctx.fillStyle = 'rgba(255,255,255,0.02)';
+      ctx.fillRect(ux, uy, unitImageW, unitBoxH - 10);
+
       if(img){
         ctx.save();
         ctx.beginPath();
@@ -807,31 +847,46 @@
         ctx.clip();
         drawImageContain(ctx, img, ux, uy, unitImageW, unitImageH);
         ctx.restore();
-      } else {
-        ctx.fillStyle='rgba(255,255,255,0.01)'; ctx.fillRect(ux,uy,unitImageW,unitImageH);
-        ctx.fillStyle='#ccc'; ctx.font='12px sans-serif'; ctx.fillText('圖示無法載入', ux + 8, uy + (unitImageH/2));
       }
-      ctx.fillStyle = '#fff'; ctx.font = `600 13px sans-serif`; ctx.fillText(card.name, ux + 8, uy + unitImageH + 16);
-      ctx.fillStyle = '#9ae6b4'; ctx.font = `500 12px sans-serif`;
-      const ups = Array.from(u.upgrades).map(k=> (UPGRADES.find(x=>x.key===k) || {}).label ).filter(Boolean);
-      const upText = ups.length ? ups.join(' / ') : '無';
-      wrapDrawText(ctx, upText, ux + 8, uy + unitImageH + 36, unitImageW - 12, 14);
+
+      ctx.fillStyle = '#fff';
+      ctx.font = `600 13px sans-serif`;
+      ctx.fillText(card.name, ux + 8, uy + unitImageH + 16);
+
+      ctx.fillStyle = '#9ae6b4';
+      ctx.font = `500 12px sans-serif`;
+      const ups = Array.from(u.upgrades)
+        .map(k=> (UPGRADES.find(x=>x.key===k)||{}).label)
+        .filter(Boolean);
+      wrapDrawText(ctx, ups.join(' / ') || '無', ux + 8, uy + unitImageH + 36, unitImageW - 12, 14);
+
       ux += unitImageW + 12;
-      if((i+1) % unitsPerRow === 0){ ux = padding; uy += unitBoxH + 20; }
+      if((i+1) % unitsPerRow === 0){
+        ux = padding;
+        uy += unitBoxH + 20;
+      }
     });
 
+    //---------------------
+    // OUTPUT PNG
+    //---------------------
     return new Promise((resolve)=>{
-      canvas.toBlob(function(blob){
+      canvas.toBlob((blob)=>{
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        const safe = deckName.replace(/[^\w\-_\u4e00-\u9fff]/g,'_') || 'deck';
+        const safe = deckName.replace(/[^\w\-\u4e00-\u9fff]/g,'_') || 'deck';
         a.download = `${safe}.png`;
         document.body.appendChild(a);
         a.click();
-        setTimeout(()=> { URL.revokeObjectURL(a.href); document.body.removeChild(a); resolve(); }, 1500);
+        setTimeout(()=>{
+          URL.revokeObjectURL(a.href);
+          a.remove();
+          resolve();
+        }, 800);
       }, 'image/png');
     });
-  }
+}
+
 
   // drawImageContain: draw image fully inside box, preserve original aspect ratio; image is centered, not cropped
   function drawImageContain(ctx, img, x, y, w, h){
@@ -974,6 +1029,7 @@ init();
 </script>
 </body>
 </html>
+
 
 
 
