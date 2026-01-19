@@ -897,55 +897,76 @@
     renderLeaders(); renderACards(); renderBCards(); renderCCards(); updateLimitHints();
   }
 
-  document.getElementById('tabCamp').addEventListener('click', ()=> { tabCamp.classList.add('active'); tabLineup.classList.remove('active'); campStage.style.display = ''; lineupStage.style.display = 'none'; });
-  document.getElementById('tabLineup').addEventListener('click', ()=> { tabLineup.classList.add('active'); tabCamp.classList.remove('active'); campStage.style.display = 'none'; lineupStage.style.display = ''; });
+  // ---------------------------
+// Tab switching & buttons
+// ---------------------------
 
-  // ENTER LINEUP: build camp -> lineup (no final-count check here)
-  document.getElementById('enterLineupBtn').addEventListener('click', ()=> {
-    if(!chosenLeaderId){ alert('請先選擇一位領主。'); return; }
-    buildCampCardsFromSelections();
-    renderLineupGallery();
-    tabLineup.click();
-  });
+// Camp / Lineup tab switch
+tabCamp.addEventListener('click', () => {
+  tabCamp.classList.add('active');
+  tabLineup.classList.remove('active');
+  campStage.style.display = '';
+  lineupStage.style.display = 'none';
+});
 
-  document.getElementById('resetCampBtn').addEventListener('click', ()=> { if(!confirm('重置大本營會清除已選擇內容，確定嗎？')) return; resetCamp(); });
-  document.getElementById('backToCampBtn').addEventListener('click', ()=> { tabCamp.click(); });
-  document.getElementById('clearLineupBtn').addEventListener('click', ()=> { if(!confirm('重置先發將清除所有選擇數量與升級，確定嗎？')) return; const leaderUnit = units.find(u => u.isLeader); units.length = 0; if(leaderUnit) units.push(leaderUnit); lineupCounts.clear(); campCards.forEach(c => lineupCounts.set(c.id, c.isLeader ? 1 : 0)); usedBudget = 0; updateBudgetDisplay(); renderLineupGallery(); });
+tabLineup.addEventListener('click', () => {
+  tabLineup.classList.add('active');
+  tabCamp.classList.remove('active');
+  campStage.style.display = 'none';
+  lineupStage.style.display = '';
+  renderLineupGallery();
+});
 
-  // CONFIRM: check selected units count (including leader) is 7~10 before opening confirm modal
-  document.getElementById('confirmBtn').addEventListener('click', ()=> {
-    const totalSelectedUnits = units.length; // includes leader if present
-    if(totalSelectedUnits < 7 || totalSelectedUnits > 10){
-      showCountNotification(`先發單位數量必須為 7 ~ 10 張（包含領主）。目前已選擇 ${totalSelectedUnits} 張。請調整後再確認。`);
-      return;
-    }
-    openConfirmModal();
-  });
-
-  function openConfirmModal(){
-    const backdrop = document.createElement('div'); backdrop.className = 'modal-backdrop';
-    const modal = document.createElement('div'); modal.className = 'modal';
-    modal.innerHTML = `
-      <h3>匯出先發陣容</h3>
-      <label>副牌組名稱：</label>
-      <input id="deckName" type="text" placeholder="輸入牌組名稱">
-      <label>戰術打法：</label>
-      <textarea id="deckTactics" rows="4" placeholder="輸入戰術說明"></textarea>
-      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;">
-        <button id="cancelExport" class="btn-ghost">取消</button>
-        <button id="doExport" class="btn-primary">匯出為高畫質圖片</button>
-      </div>
-      <div style="font-size:12px;margin-top:8px;color:#cfe8ff">備註：使用 repo 的相對路徑 images/，在 GitHub Pages 中 CORS 不會阻擋。</div>
-    `;
-    backdrop.appendChild(modal); document.body.appendChild(backdrop);
-    modal.querySelector('#cancelExport').addEventListener('click', ()=> document.body.removeChild(backdrop));
-    modal.querySelector('#doExport').addEventListener('click', async ()=> { const name = modal.querySelector('#deckName').value || '未命名牌組'; const tactics = modal.querySelector('#deckTactics').value || ''; await exportDeckAsImage(name, tactics); document.body.removeChild(backdrop); });
+// Enter lineup (build camp first)
+document.getElementById('enterLineupBtn').addEventListener('click', () => {
+  if(!chosenLeaderId){
+    alert('請先選擇一名領主');
+    return;
   }
+  buildCampCardsFromSelections();
+  tabLineup.click();
+});
 
-  init();
+// Back to camp
+document.getElementById('backToCampBtn').addEventListener('click', () => {
+  tabCamp.click();
+});
+
+// Reset camp
+document.getElementById('resetCampBtn').addEventListener('click', () => {
+  if(!confirm('確定要重置大本營嗎？')) return;
+  resetCamp();
+});
+
+// Clear lineup
+document.getElementById('clearLineupBtn').addEventListener('click', () => {
+  if(!confirm('確定要清空軍表構築嗎？')) return;
+  lineupCounts.clear();
+  units.length = 0;
+  usedBudget = 0;
+  buildCampCardsFromSelections();
+  renderLineupGallery();
+});
+
+// Confirm lineup (export)
+document.getElementById('confirmBtn').addEventListener('click', async () => {
+  if(units.length === 0){
+    showCountNotification('你尚未選擇任何先發單位');
+    return;
+  }
+  const name = prompt('請輸入軍表名稱', '混沌異域軍表');
+  if(!name) return;
+  const tactics = prompt('戰術備註（可留空）','') || '';
+  await exportDeckAsImage(name, tactics);
+});
+
+// Init
+init();
+
 </script>
 </body>
 </html>
+
 
 
 
