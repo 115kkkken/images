@@ -186,6 +186,7 @@
         <button class="btn-primary" id="confirmBtn">確認軍表</button>
         <button class="btn-ghost" id="backToCampBtn">返回編輯大本營</button>
         <button class="btn-ghost" id="clearLineupBtn">重置軍表構築</button>
+        <button class="btn-ghost" id="shareBtn" title="生成可重現此構築的網址">生成分享連結</button>
       </div>
     </div>
 
@@ -879,22 +880,189 @@
       document.body.removeChild(backdrop);
     });
   }
+// ---------------------------
+// START ADDED JS: State serialization / sharing
+// ADDED START
+// ---------------------------
+// encode unicode-safe base64 then URI-encode
+function encodeState(obj){
+  try{
+    const s = JSON.stringify(obj);
+    const b = btoa(unescape(encodeURIComponent(s)));
+    return encodeURIComponent(b);
+  }catch(e){
+    console.error('encodeState error', e);
+    return '';
+  }
+}
+function decodeState(token){
+  try{
+    const b = decodeURIComponent(token);
+    const s = decodeURIComponent(escape(atob(b)));
+    return JSON.parse(s);
+  }catch(e){
+    console.warn('decodeState failed', e);
+    return null;
+  }
+}
 
+function buildShareState(){
+  // minimal necessary state to rebuild: leader, campSelections, selectedOtherA, selectedCtypes, units (cardId + upgrades)
+  const state = {
+    chosenLeaderId,
+    campSelections: Array.from(campSelections),
+    selectedOtherA: Array.from(selectedOtherA),
+    selectedCtypes: Array.from(selectedCtypes),
+    units: units.map(u=>({
+      cardId: u.cardId,
+      upgrades: Array.from(u.upgrades || []),
+      isLeader: !!u.isLeader
+    }))
+  };
+  return state;
+}
+
+function generateShareUrl(){
+  const state = buildShareState();
+  const token = encodeState(state);
+  if(!token) return null;
+  // use hash to avoid server involvement
+  return `${location.origin}${location.pathname}#state=${token}`;
+}
+
+function openShareModal(){
+  const url = generateShareUrl();
+  if(!url){ alert('無法生成連結（序列化失敗）'); return; }
+  const backdrop = document.createElement('div'); backdrop.className = 'modal-backdrop';
+  const modal = document.createElement('div'); modal.className = 'modal';
+  modal.innerHTML = `
+    <h3>分享連結已生成</h3>
+    <label>此連結可在未來還原當前構築：</label>
+    <input id="shareUrlField" type="text" readonly>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;">
+      <button id="closeShare" class="btn-ghost">關閉</button>
+      <button id="copyShare" class="btn-primary">複製連結</button>
+      <a id="openShare" class="btn-primary" style="text-decoration:none;color:#012;display:inline-flex;align-items:center;justify-content:center;" target="_blank">在新分頁開啟</a>
+    </div>
+  `;
+  backdrop.appendChild(modal); document.body.appendChild(backdrop);
+  const field = modal.querySelector('#shareUrlField');
+  field.value = url;
+  const openShare = modal.querySelector('#openShare');
+  openShare.href = url;
+  modal.querySelector('#closeShare').addEventListener('click', ()=> document.body.removeChild(backdrop));
+  modal.querySelector('#copyShare').addEventListener('click', async ()=> {
+    try{
+      await navigator.clipboard.writeText(url);
+      modal.querySelector('#copyShare').textContent = '已複製';
+      setTimeout(()=> modal.querySelector('#copyShare').textContent = '複製連結', 1400);
+    }catch(e){
+      prompt('請手動複製此連結', url);
+    }
+  });
+}
+
+function applyStateObject(state){
+  if(!state) return;
+  // apply leader + selections
+  if(state.chosenLeaderId && leaders.some(l=>l.id===state.chosenLeaderId)){
+    chosenLeaderId = state.chosenLeaderId;
+  } else {
+    chosenLeaderId = null;
+  }
+  campSelections.clear();
+  selectedOtherA.clear();
+  selectedCtypes.clear();
+  if(Array.isArray(state.campSelections)){
+    state.campSelections.forEach(id => campSelections.add(id));
+  }
+  if(Array.isArray(state.selectedOtherA)){
+    state.selectedOtherA.forEach(id => selectedOtherA.add(id));
+  }
+  if(Array.isArray(state.selectedCtypes)){
+    state.selectedCtypes.forEach(id => selectedCtypes.add(id));
+  }
+  // If leader was not in campSelections, ensure leader included to match chooseLeader behavior
+  if(chosenLeaderId) campSelections.add(chosenLeaderId);
+
+  // render UI for camp
+  renderLeaders();
+  renderACards();
+  renderBCards();
+  renderCCards();
+  updateLimitHints();
+  // build camp cards then restore units
+  buildCampCardsFromSelections();
+
+  // now reconstruct units from state.units
+  units.length = 0;
+  usedBudget = 0;
+  if(Array.isArray(state.units)){
+    state.units.forEach(u=>{
+      const cardId = u.cardId;
+      const isLeader = !!u.isLeader;
+      const cardInfo = campCards.find(c=>c.id===cardId) || null;
+      const uid = (isLeader ? 'leader_' + Date.now() + '_' + Math.floor(Math.random()*1000) : 'u_' + Date.now() + '_' + Math.floor(Math.random()*1000));
+      const upgradesArr = Array.isArray(u.upgrades) ? u.upgrades : [];
+      const upSet = new Set(upgradesArr.filter(k => UPGRADES.some(x=>x.key===k)));
+      let upgradesCost = 0;
+      upSet.forEach(k => { const up = UPGRADES.find(x=>x.key===k); if(up) upgradesCost += up.cost; });
+      units.push({ uid, cardId, cardName: cardInfo ? cardInfo.name : (u.cardName || ''), upgrades: upSet, upgradesCost, isLeader });
+      if(!isLeader && cardInfo) {
+        lineupCounts.set(cardId, (lineupCounts.get(cardId)||0) + 1);
+        usedBudget += (cardInfo.cost + upgradesCost);
+      } else if(isLeader && cardInfo){
+        // leader has cost 0 in camp model
+        usedBudget += upgradesCost;
+      } else {
+        usedBudget += upgradesCost;
+      }
+    });
+  }
+  updateBudgetDisplay();
+  renderLineupGallery();
+
+  // switch to lineup view so opening URL directly shows constructed content
+  tabLineup.classList.add('active'); tabCamp.classList.remove('active'); campStage.style.display = 'none'; lineupStage.style.display = '';
+}
+
+function tryLoadStateFromHash(){
+  const h = location.hash || '';
+  if(!h) return false;
+  const m = h.match(/state=([^&]+)/);
+  if(!m) return false;
+  const token = m[1];
+  const obj = decodeState(token);
+  if(!obj) return false;
+  applyStateObject(obj);
+  return true;
+}
+// ---------------------------
+// ADDED END
+// ---------------------------
   // Init and event wiring (same as previous)
   async function init(){
     document.getElementById('enterLineupBtn').disabled = true;
     document.getElementById('confirmBtn').disabled = true;
     document.getElementById('clearLineupBtn').disabled = true;
     document.getElementById('resetCampBtn').disabled = true;
-
+    /* START ADDED (init): disable share button during preload */
+document.getElementById('shareBtn').disabled = true;
+/* END ADDED (init) */
     await preloadImagesForAll();
 
     document.getElementById('enterLineupBtn').disabled = false;
     document.getElementById('confirmBtn').disabled = false;
     document.getElementById('clearLineupBtn').disabled = false;
     document.getElementById('resetCampBtn').disabled = false;
+    /* START ADDED (init): enable share button after preload */
+document.getElementById('shareBtn').disabled = false;
+/* END ADDED (init) */
 
     renderLeaders(); renderACards(); renderBCards(); renderCCards(); updateLimitHints();
+    /* START ADDED (init): try load state from URL hash after preload */
+tryLoadStateFromHash();
+/* END ADDED (init) */
   }
 
   document.getElementById('tabCamp').addEventListener('click', ()=> { tabCamp.classList.add('active'); tabLineup.classList.remove('active'); campStage.style.display = ''; lineupStage.style.display = 'none'; });
@@ -911,7 +1079,20 @@
   document.getElementById('resetCampBtn').addEventListener('click', ()=> { if(!confirm('重置大本營會清除已選擇內容，確定嗎？')) return; resetCamp(); });
   document.getElementById('backToCampBtn').addEventListener('click', ()=> { tabCamp.click(); });
   document.getElementById('clearLineupBtn').addEventListener('click', ()=> { if(!confirm('重置先發將清除所有選擇數量與升級，確定嗎？')) return; const leaderUnit = units.find(u => u.isLeader); units.length = 0; if(leaderUnit) units.push(leaderUnit); lineupCounts.clear(); campCards.forEach(c => lineupCounts.set(c.id, c.isLeader ? 1 : 0)); usedBudget = 0; updateBudgetDisplay(); renderLineupGallery(); });
-
+// START ADDED: share button handler
+// ADDED START
+// SHARE 按鈕
+document.getElementById('shareBtn').addEventListener('click', ()=> {
+  // ensure campCards/units state is current
+  // if user is still in camp stage, build camp first so share captures camp cards
+  if(campStage.style.display !== 'none'){
+    if(!chosenLeaderId){ alert('請先選擇一位領主。'); return; }
+    buildCampCardsFromSelections();
+  }
+  openShareModal();
+});
+// ADDED END
+// END ADDED: share button handler
   // CONFIRM: check selected units count (including leader) is 7~10 before opening confirm modal
   document.getElementById('confirmBtn').addEventListener('click', ()=> {
     const totalSelectedUnits = units.length; // includes leader if present
@@ -946,6 +1127,7 @@
 </script>
 </body>
 </html>
+
 
 
 
