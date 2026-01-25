@@ -11,7 +11,7 @@
       --bg:#0b0b0b;
       --panel: rgba(255,255,255,0.03);
     }
-    html,body{min-height:100%;margin:0;background:var(--bg);color:#eee;font-family:system-ui,-apple-system,Segoe UI,Roboto,"Noto Sans",Arial;}
+    html,body{height:100%;margin:0;background:var(--bg);color:#eee;font-family:system-ui,-apple-system,Segoe UI,Roboto,"Noto Sans",Arial;}
   
     .topbar{
       position:fixed; left:0; right:0; top:0; height:var(--topbar-height);
@@ -104,13 +104,6 @@
     }
     .img-zoom-clone img{ width:100%; height:100%; object-fit:contain; display:block; pointer-events:none; user-select:none; }
     body.img-zoom-open { touch-action: none; user-select: none; -webkit-user-select:none; }
-  .main{
-  padding-top: calc(var(--topbar-height) + 8px);
-  min-height: 100vh;
-  box-sizing: border-box;
-  overflow-y: auto;
-}
-
   </style>
 </head>
 <body>
@@ -138,7 +131,6 @@
       <button id="tabLineup">軍表</button>
     </div>
 
-    <div class="main">
     <!-- CAMP -->
     <div id="campStage">
       <div class="panel">
@@ -189,7 +181,7 @@
         </div>
 
       </div>
-    </div>
+
       <div class="footer-actions" style="margin-top:14px;">
         <button class="btn-primary" id="confirmBtn">確認軍表</button>
         <button class="btn-ghost" id="backToCampBtn">返回編輯大本營</button>
@@ -723,123 +715,83 @@
   // ---------------------------
   // Export: draw images with containment and fixed image boxes (no cropping, no overlap)
   // ---------------------------
-async function exportDeckAsImage(deckName, tactics){
-    const scaleFactor = 2; // 你原本的放大比例
-    const dpr = window.devicePixelRatio || 2; // 額外再乘一次 Retina 比例
-    const pixelRatio = scaleFactor * dpr;     // ← 核心：實際輸出倍率
-
+  async function exportDeckAsImage(deckName, tactics){
+    const scaleFactor = 2;
     const baseW = 1200;
     const padding = 24;
     const cardsPerRow = 6;
 
-    // fixed image box sizes
-    const cardImageW = Math.floor((baseW - padding*2 - (cardsPerRow-1)*12) / cardsPerRow);
-    const cardImageH = 90;
-    const labelH = 20;
-    const cardBoxH = cardImageH + labelH + 6;
+    // fixed image box sizes (same for every small card)
+    const cardImageW =  (Math.floor((baseW - padding*2 - (cardsPerRow-1)*12)/cardsPerRow)); // width of card box
+    const cardImageH = 90; // height reserved for the image area (keeps uniform size)
+    const labelH = 20; // label area under image
+    const cardBoxH = cardImageH + labelH + 6; // total row height per card (consistent)
 
     const campRows = Math.ceil(campCards.length / cardsPerRow);
     const unitsPerRow = 4;
-    const unitImageW = Math.floor((baseW - padding*2 - (unitsPerRow-1)*12) / unitsPerRow);
-    const unitImageH = 110;
-    const unitBoxH = unitImageH + labelH + 14;
+    const unitImageW = Math.floor((baseW - padding*2 - (unitsPerRow-1)*12)/unitsPerRow);
+    const unitImageH = 110; // fixed unit image H
+    const unitBoxH = unitImageH + labelH + 14; // total unit box height
 
     const unitRows = Math.max(1, Math.ceil(units.length / unitsPerRow));
     const headerH = 120;
     const hBase = padding*2 + headerH + campRows*cardBoxH + 24 + unitRows*(unitBoxH + 20);
-
-    // →「畫布邏輯尺寸」
-    const canvasW = baseW;
-    const canvasH = Math.max(600, Math.floor(hBase));
-
-    // →「實際輸出像素（高畫質）」
-    const outputW = canvasW * pixelRatio;
-    const outputH = canvasH * pixelRatio;
+    const canvasW = baseW * scaleFactor;
+    const canvasH = Math.max(600, Math.floor(hBase * scaleFactor));
 
     const canvas = document.createElement('canvas');
-    canvas.width = outputW;
-    canvas.height = outputH;
-
+    canvas.width = canvasW; canvas.height = canvasH;
     const ctx = canvas.getContext('2d');
+    ctx.scale(scaleFactor, scaleFactor);
 
-    // Retina scale（非常重要）
-    ctx.scale(pixelRatio, pixelRatio);
-
-    //---------------------
-    // START DRAWING
-    //---------------------
-
-    ctx.fillStyle = '#071018';
-    ctx.fillRect(0,0,canvasW,canvasH);
-
-    // HEADER
-    ctx.fillStyle = '#fff';
-    ctx.font = `700 28px sans-serif`;
-    ctx.fillText(deckName, padding, padding + 28);
-
-    ctx.font = `14px sans-serif`;
-    ctx.fillStyle = '#cfe8ff';
-    const tacticsLines = wrapText(ctx, tactics, canvasW - padding*2);
+    // background & header
+    ctx.fillStyle = '#071018'; ctx.fillRect(0,0,baseW,canvasH/scaleFactor);
+    ctx.fillStyle = '#fff'; ctx.font = `700 28px sans-serif`; ctx.fillText(deckName, padding, padding + 28);
+    ctx.font = `14px sans-serif`; ctx.fillStyle = '#cfe8ff';
+    const tacticsLines = wrapText(ctx, tactics, baseW - padding*2);
     tacticsLines.forEach((ln,i)=> ctx.fillText(ln, padding, padding + 28 + (i+1)*18));
-
     const rem = Math.max(0, MAX_BUDGET - usedBudget);
     ctx.fillStyle = '#9ae6b4'; ctx.font = `600 14px sans-serif`;
-    ctx.fillText(`剩餘費用: ${rem}`, canvasW - padding - 220, padding + 24);
-    ctx.fillText(`已選卡牌數量: ${units.length}`, canvasW - padding - 220, padding + 44);
+    ctx.fillText(`剩餘費用: ${rem}`, baseW - padding - 220, padding + 24);
+    ctx.fillText(`已選卡牌數量: ${units.length}`, baseW - padding - 220, padding + 44);
 
-    //---------------------
-    // CAMP CARDS
-    //---------------------
+    // camp title
     let y = padding + headerH;
-    ctx.fillStyle = '#cfe8ff'; ctx.font = `600 16px sans-serif`;
-    ctx.fillText('大本營牌庫', padding, y - 10);
+    ctx.fillStyle = '#cfe8ff'; ctx.font = `600 16px sans-serif`; ctx.fillText('大本營牌庫', padding, y - 10);
 
-    let cx = padding, cy = y + 12, col = 0;
-
-    campCards.forEach((c)=>{
-      const img = imageCache[c.id];
-      ctx.fillStyle = 'rgba(255,255,255,0.02)';
-      ctx.fillRect(cx, cy, cardImageW, cardBoxH - 6);
-
+    // draw camp grid: each card uses fixed image box (cardImageW x cardImageH) and we CENTER and CONTAIN the original image into that box.
+    let cx = padding; let cy = y + 12; let col = 0;
+    campCards.forEach((c,i)=>{
+      const img = imageCache[c.id] || null;
+      // card background
+      ctx.fillStyle = 'rgba(255,255,255,0.02)'; ctx.fillRect(cx, cy, cardImageW, cardBoxH - 6);
+      // draw contained image centered inside (no cropping)
       if(img){
+        // clip to the image box area to ensure no overflow (defensive)
         ctx.save();
         ctx.beginPath();
         ctx.rect(cx, cy, cardImageW, cardImageH);
         ctx.clip();
         drawImageContain(ctx, img, cx, cy, cardImageW, cardImageH);
         ctx.restore();
+      } else {
+        ctx.fillStyle = 'rgba(255,255,255,0.01)'; ctx.fillRect(cx, cy, cardImageW, cardImageH);
+        ctx.fillStyle = '#ccc'; ctx.font = `12px sans-serif`; ctx.fillText('圖示無法載入', cx + 8, cy + (cardImageH/2));
       }
-
-      ctx.fillStyle = '#fff';
-      ctx.font = `600 12px sans-serif`;
-      ctx.fillText(c.name, cx + 6, cy + cardImageH + 14);
-
-      col++;
-      cx += cardImageW + 12;
-
-      if(col >= cardsPerRow){
-        col = 0;
-        cx = padding;
-        cy += cardBoxH;
-      }
+      // name under image in reserved label area
+      ctx.fillStyle = '#fff'; ctx.font = `600 12px sans-serif`; ctx.fillText(c.name, cx + 6, cy + cardImageH + 14);
+      col++; cx += cardImageW + 12; if(col >= cardsPerRow){ col = 0; cx = padding; cy += cardBoxH; }
     });
 
-    //---------------------
-    // UNITS
-    //---------------------
+    // units section
     let unitsY = cy + 130;
-    ctx.fillStyle = '#cfe8ff'; ctx.font = `600 16px sans-serif`;
-    ctx.fillText('先發陣容與升級', padding, unitsY - 10);
+    ctx.fillStyle = '#cfe8ff'; ctx.font = `600 16px sans-serif`; ctx.fillText('先發陣容與升級', padding, unitsY - 10);
 
-    let ux = padding, uy = unitsY + 12;
-
+    let ux = padding; let uy = unitsY + 12;
     units.forEach((u,i)=>{
-      const card = campCards.find(c=>c.id===u.cardId) || { name:u.cardName, img:'' };
-      const img = imageCache[card.id];
-
-      ctx.fillStyle = 'rgba(255,255,255,0.02)';
-      ctx.fillRect(ux, uy, unitImageW, unitBoxH - 10);
-
+      const card = campCards.find(c=>c.id===u.cardId) || { name:u.cardName, img: '' };
+      const img = imageCache[card.id] || null;
+      ctx.fillStyle = 'rgba(255,255,255,0.02)'; ctx.fillRect(ux, uy, unitImageW, unitBoxH - 10);
       if(img){
         ctx.save();
         ctx.beginPath();
@@ -847,46 +799,31 @@ async function exportDeckAsImage(deckName, tactics){
         ctx.clip();
         drawImageContain(ctx, img, ux, uy, unitImageW, unitImageH);
         ctx.restore();
+      } else {
+        ctx.fillStyle='rgba(255,255,255,0.01)'; ctx.fillRect(ux,uy,unitImageW,unitImageH);
+        ctx.fillStyle='#ccc'; ctx.font='12px sans-serif'; ctx.fillText('圖示無法載入', ux + 8, uy + (unitImageH/2));
       }
-
-      ctx.fillStyle = '#fff';
-      ctx.font = `600 13px sans-serif`;
-      ctx.fillText(card.name, ux + 8, uy + unitImageH + 16);
-
-      ctx.fillStyle = '#9ae6b4';
-      ctx.font = `500 12px sans-serif`;
-      const ups = Array.from(u.upgrades)
-        .map(k=> (UPGRADES.find(x=>x.key===k)||{}).label)
-        .filter(Boolean);
-      wrapDrawText(ctx, ups.join(' / ') || '無', ux + 8, uy + unitImageH + 36, unitImageW - 12, 14);
-
+      ctx.fillStyle = '#fff'; ctx.font = `600 13px sans-serif`; ctx.fillText(card.name, ux + 8, uy + unitImageH + 16);
+      ctx.fillStyle = '#9ae6b4'; ctx.font = `500 12px sans-serif`;
+      const ups = Array.from(u.upgrades).map(k=> (UPGRADES.find(x=>x.key===k) || {}).label ).filter(Boolean);
+      const upText = ups.length ? ups.join(' / ') : '無';
+      wrapDrawText(ctx, upText, ux + 8, uy + unitImageH + 36, unitImageW - 12, 14);
       ux += unitImageW + 12;
-      if((i+1) % unitsPerRow === 0){
-        ux = padding;
-        uy += unitBoxH + 20;
-      }
+      if((i+1) % unitsPerRow === 0){ ux = padding; uy += unitBoxH + 20; }
     });
 
-    //---------------------
-    // OUTPUT PNG
-    //---------------------
     return new Promise((resolve)=>{
-      canvas.toBlob((blob)=>{
+      canvas.toBlob(function(blob){
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        const safe = deckName.replace(/[^\w\-\u4e00-\u9fff]/g,'_') || 'deck';
+        const safe = deckName.replace(/[^\w\-_\u4e00-\u9fff]/g,'_') || 'deck';
         a.download = `${safe}.png`;
         document.body.appendChild(a);
         a.click();
-        setTimeout(()=>{
-          URL.revokeObjectURL(a.href);
-          a.remove();
-          resolve();
-        }, 800);
+        setTimeout(()=> { URL.revokeObjectURL(a.href); document.body.removeChild(a); resolve(); }, 1500);
       }, 'image/png');
     });
-}
-
+  }
 
   // drawImageContain: draw image fully inside box, preserve original aspect ratio; image is centered, not cropped
   function drawImageContain(ctx, img, x, y, w, h){
@@ -960,78 +897,55 @@ async function exportDeckAsImage(deckName, tactics){
     renderLeaders(); renderACards(); renderBCards(); renderCCards(); updateLimitHints();
   }
 
-  // ---------------------------
-// Tab switching & buttons
-// ---------------------------
+  document.getElementById('tabCamp').addEventListener('click', ()=> { tabCamp.classList.add('active'); tabLineup.classList.remove('active'); campStage.style.display = ''; lineupStage.style.display = 'none'; });
+  document.getElementById('tabLineup').addEventListener('click', ()=> { tabLineup.classList.add('active'); tabCamp.classList.remove('active'); campStage.style.display = 'none'; lineupStage.style.display = ''; });
 
-// Camp / Lineup tab switch
-tabCamp.addEventListener('click', () => {
-  tabCamp.classList.add('active');
-  tabLineup.classList.remove('active');
-  campStage.style.display = '';
-  lineupStage.style.display = 'none';
-});
+  // ENTER LINEUP: build camp -> lineup (no final-count check here)
+  document.getElementById('enterLineupBtn').addEventListener('click', ()=> {
+    if(!chosenLeaderId){ alert('請先選擇一位領主。'); return; }
+    buildCampCardsFromSelections();
+    renderLineupGallery();
+    tabLineup.click();
+  });
 
-tabLineup.addEventListener('click', () => {
-  tabLineup.classList.add('active');
-  tabCamp.classList.remove('active');
-  campStage.style.display = 'none';
-  lineupStage.style.display = '';
-  renderLineupGallery();
-});
+  document.getElementById('resetCampBtn').addEventListener('click', ()=> { if(!confirm('重置大本營會清除已選擇內容，確定嗎？')) return; resetCamp(); });
+  document.getElementById('backToCampBtn').addEventListener('click', ()=> { tabCamp.click(); });
+  document.getElementById('clearLineupBtn').addEventListener('click', ()=> { if(!confirm('重置先發將清除所有選擇數量與升級，確定嗎？')) return; const leaderUnit = units.find(u => u.isLeader); units.length = 0; if(leaderUnit) units.push(leaderUnit); lineupCounts.clear(); campCards.forEach(c => lineupCounts.set(c.id, c.isLeader ? 1 : 0)); usedBudget = 0; updateBudgetDisplay(); renderLineupGallery(); });
 
-// Enter lineup (build camp first)
-document.getElementById('enterLineupBtn').addEventListener('click', () => {
-  if(!chosenLeaderId){
-    alert('請先選擇一名領主');
-    return;
+  // CONFIRM: check selected units count (including leader) is 7~10 before opening confirm modal
+  document.getElementById('confirmBtn').addEventListener('click', ()=> {
+    const totalSelectedUnits = units.length; // includes leader if present
+    if(totalSelectedUnits < 7 || totalSelectedUnits > 10){
+      showCountNotification(`先發單位數量必須為 7 ~ 10 張（包含領主）。目前已選擇 ${totalSelectedUnits} 張。請調整後再確認。`);
+      return;
+    }
+    openConfirmModal();
+  });
+
+  function openConfirmModal(){
+    const backdrop = document.createElement('div'); backdrop.className = 'modal-backdrop';
+    const modal = document.createElement('div'); modal.className = 'modal';
+    modal.innerHTML = `
+      <h3>匯出先發陣容</h3>
+      <label>副牌組名稱：</label>
+      <input id="deckName" type="text" placeholder="輸入牌組名稱">
+      <label>戰術打法：</label>
+      <textarea id="deckTactics" rows="4" placeholder="輸入戰術說明"></textarea>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;">
+        <button id="cancelExport" class="btn-ghost">取消</button>
+        <button id="doExport" class="btn-primary">匯出為高畫質圖片</button>
+      </div>
+      <div style="font-size:12px;margin-top:8px;color:#cfe8ff">備註：使用 repo 的相對路徑 images/，在 GitHub Pages 中 CORS 不會阻擋。</div>
+    `;
+    backdrop.appendChild(modal); document.body.appendChild(backdrop);
+    modal.querySelector('#cancelExport').addEventListener('click', ()=> document.body.removeChild(backdrop));
+    modal.querySelector('#doExport').addEventListener('click', async ()=> { const name = modal.querySelector('#deckName').value || '未命名牌組'; const tactics = modal.querySelector('#deckTactics').value || ''; await exportDeckAsImage(name, tactics); document.body.removeChild(backdrop); });
   }
-  buildCampCardsFromSelections();
-  tabLineup.click();
-});
 
-// Back to camp
-document.getElementById('backToCampBtn').addEventListener('click', () => {
-  tabCamp.click();
-});
-
-// Reset camp
-document.getElementById('resetCampBtn').addEventListener('click', () => {
-  if(!confirm('確定要重置大本營嗎？')) return;
-  resetCamp();
-});
-
-// Clear lineup
-document.getElementById('clearLineupBtn').addEventListener('click', () => {
-  if(!confirm('確定要清空軍表構築嗎？')) return;
-  lineupCounts.clear();
-  units.length = 0;
-  usedBudget = 0;
-  buildCampCardsFromSelections();
-  renderLineupGallery();
-});
-
-// Confirm lineup (export)
-document.getElementById('confirmBtn').addEventListener('click', async () => {
-  if(units.length === 0){
-    showCountNotification('你尚未選擇任何先發單位');
-    return;
-  }
-  const name = prompt('請輸入軍表名稱', '混沌異域軍表');
-  if(!name) return;
-  const tactics = prompt('戰術備註（可留空）','') || '';
-  await exportDeckAsImage(name, tactics);
-});
-
-// Init
-init();
-
+  init();
 </script>
 </body>
 </html>
-
-
-
 
 
 
