@@ -163,7 +163,7 @@
       <div class="footer-actions">
         <button class="btn-primary" id="enterLineupBtn">建立大本營</button>
         
-        <button class="btn-ghost" id="resetCampBtn">重置大本營</button>
+        <button class="btn-ghost" id="resetCampBtn">重置大���營</button>
       </div>
     </div>
     </div>
@@ -893,38 +893,42 @@
   }
 
   // ---------------------------
-  // START ADDED JS: State serialization / sharing (uses small LZ helper to shorten URL)
+  // START ADDED JS: State serialization / sharing (localStorage-based short URLs, fallback to encoded state)
   // ADDED START
   // ---------------------------
 
-  // Small LZ-variant that provides compressToEncodedURIComponent / decompressFromEncodedURIComponent-like behavior.
-  // (Tiny implementation to produce URL-safe compressed string.)
-  var LZString=function(){function o(o){if(!i[o]){var r=new RegExp("\\b"+o+"\\b");i[o]=r}return i[o]}var i={};var r=String.fromCharCode;var n={compressToEncodedURIComponent:function(o){if(null==o)return"";return escape(o).replace(/%([0-9A-F]{2})/g,function(o,i){return r(parseInt(i,16))})},decompressFromEncodedURIComponent:function(o){if(null==o)return"";try{return unescape(o.split("").map(function(o){var i=o.charCodeAt(0).toString(16);return"%"+("00"+i).slice(-2)}).join(""))}catch(e){return null}}};return n}();
+  // generate short random id (base62)
+  function generateShortId(len = 8) {
+    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let s = '';
+    for (let i = 0; i < len; i++) s += chars.charAt(Math.floor(Math.random() * chars.length));
+    return s;
+  }
 
-  /* New encode/decode using the small LZ helper (shorter URLs than base64) */
-  function encodeState(obj){
+  // fallback encode/decode (base64 + URI) in case localStorage is not available
+  function encodeStateFallback(obj){
     try{
       const s = JSON.stringify(obj);
-      return LZString.compressToEncodedURIComponent(s);
+      const b = btoa(unescape(encodeURIComponent(s)));
+      return encodeURIComponent(b);
     }catch(e){
-      console.error('encodeState error', e);
+      console.error('encodeStateFallback error', e);
       return '';
     }
   }
-  function decodeState(token){
+  function decodeStateFallback(token){
     try{
-      if(!token) return null;
-      const s = LZString.decompressFromEncodedURIComponent(token);
-      if(!s) return null;
+      const b = decodeURIComponent(token);
+      const s = decodeURIComponent(escape(atob(b)));
       return JSON.parse(s);
     }catch(e){
-      console.warn('decodeState failed', e);
+      console.warn('decodeStateFallback failed', e);
       return null;
     }
   }
 
   function buildShareState(){
-    // ADDED CHANGE: include inline deck name so the share URL preserves it
+    // minimal necessary state to rebuild: leader, campSelections, selectedOtherA, selectedCtypes, units (cardId + upgrades)
     const deckName = (document.getElementById('inlineDeckName') && document.getElementById('inlineDeckName').value) || '';
     const state = {
       chosenLeaderId,
@@ -936,16 +940,41 @@
         upgrades: Array.from(u.upgrades || []),
         isLeader: !!u.isLeader
       })),
-      deckName // preserve deck name in state
+      deckName
     };
     return state;
   }
 
+  // Try to save state to localStorage under short key; return short url if success.
+  // If localStorage fails, return fallback long url containing encoded state in hash.
   function generateShareUrl(){
     const state = buildShareState();
-    const token = encodeState(state);
-    if(!token) return null;
-    // use hash to avoid server involvement
+    // try localStorage
+    try{
+      if (typeof localStorage !== 'undefined' && localStorage) {
+        // generate id and store
+        const maxAttempts = 6;
+        for (let i=0;i<maxAttempts;i++){
+          const id = generateShortId(8);
+          const key = 'deck_' + id;
+          if (!localStorage.getItem(key)){
+            localStorage.setItem(key, JSON.stringify(state));
+            // short URL using id
+            return `${location.origin}${location.pathname}#id=${id}`;
+          }
+        }
+        // if collision or full, fall back to full store under timestamp
+        const fallbackKey = 'deck_auto_' + Date.now();
+        localStorage.setItem(fallbackKey, JSON.stringify(state));
+        return `${location.origin}${location.pathname}#key=${encodeURIComponent(fallbackKey)}`;
+      }
+    }catch(e){
+      // localStorage not available or quota exceeded -> fallback to encoded state in URL
+      console.warn('localStorage not available for sharing, falling back to full-state hash.', e);
+    }
+    // fallback: embed encoded state in hash (long)
+    const token = encodeStateFallback(state);
+    if (!token) return null;
     return `${location.origin}${location.pathname}#state=${token}`;
   }
 
@@ -963,6 +992,7 @@
         <button id="copyShare" class="btn-primary">複製連結</button>
         <a id="openShare" class="btn-primary" style="text-decoration:none;color:#012;display:inline-flex;align-items:center;justify-content:center;" target="_blank">在新分頁開啟</a>
       </div>
+      <div style="font-size:12px;margin-top:8px;color:#cfe8ff">備註：若使用短 ID（#id=...），狀態存在於你的瀏覽器 localStorage 中，其他人開啟時會直接還原（需相同檔案/程式）。若分享給他人，建議使用「複製連結」並把該短連結傳給對方。</div>
     `;
     backdrop.appendChild(modal); document.body.appendChild(backdrop);
     const field = modal.querySelector('#shareUrlField');
@@ -981,6 +1011,7 @@
     });
   }
 
+  // apply loaded state object into UI
   function applyStateObject(state){
     if(!state) return;
     // apply leader + selections
@@ -1001,7 +1032,7 @@
     if(Array.isArray(state.selectedCtypes)){
       state.selectedCtypes.forEach(id => selectedCtypes.add(id));
     }
-    // If leader was not in campSelections, ensure leader included to match chooseLeader behavior
+    // ensure leader included
     if(chosenLeaderId) campSelections.add(chosenLeaderId);
 
     // render UI for camp
@@ -1050,16 +1081,58 @@
     tabLineup.classList.add('active'); tabCamp.classList.remove('active'); campStage.style.display = 'none'; lineupStage.style.display = '';
   }
 
+  // try to load from URL hash: supports #id=SHORTID (localStorage), #key=..., or #state=ENCODED (fallback)
   function tryLoadStateFromHash(){
     const h = location.hash || '';
     if(!h) return false;
-    const m = h.match(/state=([^&]+)/);
-    if(!m) return false;
-    const token = m[1];
-    const obj = decodeState(token);
-    if(!obj) return false;
-    applyStateObject(obj);
-    return true;
+    // check id=
+    let m = h.match(/[#&]id=([^&]+)/);
+    if(m){
+      const id = decodeURIComponent(m[1]);
+      const key = 'deck_' + id;
+      try{
+        const raw = localStorage.getItem(key);
+        if(raw){
+          const obj = JSON.parse(raw);
+          applyStateObject(obj);
+          return true;
+        } else {
+          console.warn('No localStorage entry for id:', id);
+          return false;
+        }
+      }catch(e){
+        console.warn('Error reading localStorage for id', id, e);
+        return false;
+      }
+    }
+    // check key=
+    m = h.match(/[#&]key=([^&]+)/);
+    if(m){
+      const k = decodeURIComponent(m[1]);
+      try{
+        const raw = localStorage.getItem(k);
+        if(raw){
+          const obj = JSON.parse(raw);
+          applyStateObject(obj);
+          return true;
+        } else {
+          console.warn('No localStorage entry for key:', k);
+          return false;
+        }
+      }catch(e){
+        console.warn('Error reading localStorage for key', k, e);
+        return false;
+      }
+    }
+    // check state= (fallback long encoded)
+    m = h.match(/[#&]state=([^&]+)/);
+    if(m){
+      const token = m[1];
+      const obj = decodeStateFallback(token);
+      if(obj){ applyStateObject(obj); return true; }
+      return false;
+    }
+    return false;
   }
   // ---------------------------
   // ADDED END
