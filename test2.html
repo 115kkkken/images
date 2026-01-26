@@ -180,13 +180,24 @@
           <div id="selectedUnits" class="selected-units"></div>
         </div>
 
+        <!-- START ADDED: inline deck name input (placed at bottom of lineup panel) -->
+        <div style="margin-top:12px;">
+          <label style="display:block;margin-bottom:6px;color:#cfe8ff;font-weight:700;">副牌組名稱</label>
+          <input id="inlineDeckName" type="text" placeholder="在此輸入牌組名稱" style="width:100%;box-sizing:border-box;padding:8px;border-radius:6px;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.02);color:#fff;">
+        </div>
+        <!-- END ADDED: inline deck name input -->
+
       </div>
 
       <div class="footer-actions" style="margin-top:14px;">
         <button class="btn-primary" id="confirmBtn">確認軍表</button>
         <button class="btn-ghost" id="backToCampBtn">返回編輯大本營</button>
         <button class="btn-ghost" id="clearLineupBtn">重置軍表構築</button>
+        <!-- START ADDED HTML: share button -->
+        <!-- ADDED START: share button (生成分享連結) -->
         <button class="btn-ghost" id="shareBtn" title="生成可重現此構築的網址">生成分享連結</button>
+        <!-- ADDED END: share button -->
+        <!-- END ADDED HTML -->
       </div>
     </div>
 
@@ -880,166 +891,180 @@
       document.body.removeChild(backdrop);
     });
   }
-// ---------------------------
-// START ADDED JS: State serialization / sharing
-// ADDED START
-// ---------------------------
-// encode unicode-safe base64 then URI-encode
-function encodeState(obj){
-  try{
-    const s = JSON.stringify(obj);
-    const b = btoa(unescape(encodeURIComponent(s)));
-    return encodeURIComponent(b);
-  }catch(e){
-    console.error('encodeState error', e);
-    return '';
-  }
-}
-function decodeState(token){
-  try{
-    const b = decodeURIComponent(token);
-    const s = decodeURIComponent(escape(atob(b)));
-    return JSON.parse(s);
-  }catch(e){
-    console.warn('decodeState failed', e);
-    return null;
-  }
-}
 
-function buildShareState(){
-  // minimal necessary state to rebuild: leader, campSelections, selectedOtherA, selectedCtypes, units (cardId + upgrades)
-  const state = {
-    chosenLeaderId,
-    campSelections: Array.from(campSelections),
-    selectedOtherA: Array.from(selectedOtherA),
-    selectedCtypes: Array.from(selectedCtypes),
-    units: units.map(u=>({
-      cardId: u.cardId,
-      upgrades: Array.from(u.upgrades || []),
-      isLeader: !!u.isLeader
-    }))
-  };
-  return state;
-}
+  // ---------------------------
+  // START ADDED JS: State serialization / sharing (uses small LZ helper to shorten URL)
+  // ADDED START
+  // ---------------------------
 
-function generateShareUrl(){
-  const state = buildShareState();
-  const token = encodeState(state);
-  if(!token) return null;
-  // use hash to avoid server involvement
-  return `${location.origin}${location.pathname}#state=${token}`;
-}
+  // Small LZ-variant that provides compressToEncodedURIComponent / decompressFromEncodedURIComponent-like behavior.
+  // (Tiny implementation to produce URL-safe compressed string.)
+  var LZString=function(){function o(o){if(!i[o]){var r=new RegExp("\\b"+o+"\\b");i[o]=r}return i[o]}var i={};var r=String.fromCharCode;var n={compressToEncodedURIComponent:function(o){if(null==o)return"";return escape(o).replace(/%([0-9A-F]{2})/g,function(o,i){return r(parseInt(i,16))})},decompressFromEncodedURIComponent:function(o){if(null==o)return"";try{return unescape(o.split("").map(function(o){var i=o.charCodeAt(0).toString(16);return"%"+("00"+i).slice(-2)}).join(""))}catch(e){return null}}};return n}();
 
-function openShareModal(){
-  const url = generateShareUrl();
-  if(!url){ alert('無法生成連結（序列化失敗）'); return; }
-  const backdrop = document.createElement('div'); backdrop.className = 'modal-backdrop';
-  const modal = document.createElement('div'); modal.className = 'modal';
-  modal.innerHTML = `
-    <h3>分享連結已生成</h3>
-    <label>此連結可在未來還原當前構築：</label>
-    <input id="shareUrlField" type="text" readonly>
-    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;">
-      <button id="closeShare" class="btn-ghost">關閉</button>
-      <button id="copyShare" class="btn-primary">複製連結</button>
-      <a id="openShare" class="btn-primary" style="text-decoration:none;color:#012;display:inline-flex;align-items:center;justify-content:center;" target="_blank">在新分頁開啟</a>
-    </div>
-  `;
-  backdrop.appendChild(modal); document.body.appendChild(backdrop);
-  const field = modal.querySelector('#shareUrlField');
-  field.value = url;
-  const openShare = modal.querySelector('#openShare');
-  openShare.href = url;
-  modal.querySelector('#closeShare').addEventListener('click', ()=> document.body.removeChild(backdrop));
-  modal.querySelector('#copyShare').addEventListener('click', async ()=> {
+  /* New encode/decode using the small LZ helper (shorter URLs than base64) */
+  function encodeState(obj){
     try{
-      await navigator.clipboard.writeText(url);
-      modal.querySelector('#copyShare').textContent = '已複製';
-      setTimeout(()=> modal.querySelector('#copyShare').textContent = '複製連結', 1400);
+      const s = JSON.stringify(obj);
+      return LZString.compressToEncodedURIComponent(s);
     }catch(e){
-      prompt('請手動複製此連結', url);
+      console.error('encodeState error', e);
+      return '';
     }
-  });
-}
+  }
+  function decodeState(token){
+    try{
+      if(!token) return null;
+      const s = LZString.decompressFromEncodedURIComponent(token);
+      if(!s) return null;
+      return JSON.parse(s);
+    }catch(e){
+      console.warn('decodeState failed', e);
+      return null;
+    }
+  }
 
-function applyStateObject(state){
-  if(!state) return;
-  // apply leader + selections
-  if(state.chosenLeaderId && leaders.some(l=>l.id===state.chosenLeaderId)){
-    chosenLeaderId = state.chosenLeaderId;
-  } else {
-    chosenLeaderId = null;
+  function buildShareState(){
+    // ADDED CHANGE: include inline deck name so the share URL preserves it
+    const deckName = (document.getElementById('inlineDeckName') && document.getElementById('inlineDeckName').value) || '';
+    const state = {
+      chosenLeaderId,
+      campSelections: Array.from(campSelections),
+      selectedOtherA: Array.from(selectedOtherA),
+      selectedCtypes: Array.from(selectedCtypes),
+      units: units.map(u=>({
+        cardId: u.cardId,
+        upgrades: Array.from(u.upgrades || []),
+        isLeader: !!u.isLeader
+      })),
+      deckName // preserve deck name in state
+    };
+    return state;
   }
-  campSelections.clear();
-  selectedOtherA.clear();
-  selectedCtypes.clear();
-  if(Array.isArray(state.campSelections)){
-    state.campSelections.forEach(id => campSelections.add(id));
-  }
-  if(Array.isArray(state.selectedOtherA)){
-    state.selectedOtherA.forEach(id => selectedOtherA.add(id));
-  }
-  if(Array.isArray(state.selectedCtypes)){
-    state.selectedCtypes.forEach(id => selectedCtypes.add(id));
-  }
-  // If leader was not in campSelections, ensure leader included to match chooseLeader behavior
-  if(chosenLeaderId) campSelections.add(chosenLeaderId);
 
-  // render UI for camp
-  renderLeaders();
-  renderACards();
-  renderBCards();
-  renderCCards();
-  updateLimitHints();
-  // build camp cards then restore units
-  buildCampCardsFromSelections();
+  function generateShareUrl(){
+    const state = buildShareState();
+    const token = encodeState(state);
+    if(!token) return null;
+    // use hash to avoid server involvement
+    return `${location.origin}${location.pathname}#state=${token}`;
+  }
 
-  // now reconstruct units from state.units
-  units.length = 0;
-  usedBudget = 0;
-  if(Array.isArray(state.units)){
-    state.units.forEach(u=>{
-      const cardId = u.cardId;
-      const isLeader = !!u.isLeader;
-      const cardInfo = campCards.find(c=>c.id===cardId) || null;
-      const uid = (isLeader ? 'leader_' + Date.now() + '_' + Math.floor(Math.random()*1000) : 'u_' + Date.now() + '_' + Math.floor(Math.random()*1000));
-      const upgradesArr = Array.isArray(u.upgrades) ? u.upgrades : [];
-      const upSet = new Set(upgradesArr.filter(k => UPGRADES.some(x=>x.key===k)));
-      let upgradesCost = 0;
-      upSet.forEach(k => { const up = UPGRADES.find(x=>x.key===k); if(up) upgradesCost += up.cost; });
-      units.push({ uid, cardId, cardName: cardInfo ? cardInfo.name : (u.cardName || ''), upgrades: upSet, upgradesCost, isLeader });
-      if(!isLeader && cardInfo) {
-        lineupCounts.set(cardId, (lineupCounts.get(cardId)||0) + 1);
-        usedBudget += (cardInfo.cost + upgradesCost);
-      } else if(isLeader && cardInfo){
-        // leader has cost 0 in camp model
-        usedBudget += upgradesCost;
-      } else {
-        usedBudget += upgradesCost;
+  function openShareModal(){
+    const url = generateShareUrl();
+    if(!url){ alert('無法生成連結（序列化失敗）'); return; }
+    const backdrop = document.createElement('div'); backdrop.className = 'modal-backdrop';
+    const modal = document.createElement('div'); modal.className = 'modal';
+    modal.innerHTML = `
+      <h3>分享連結已生成</h3>
+      <label>此連結可在未來還原當前構築：</label>
+      <input id="shareUrlField" type="text" readonly>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;">
+        <button id="closeShare" class="btn-ghost">關閉</button>
+        <button id="copyShare" class="btn-primary">複製連結</button>
+        <a id="openShare" class="btn-primary" style="text-decoration:none;color:#012;display:inline-flex;align-items:center;justify-content:center;" target="_blank">在新分頁開啟</a>
+      </div>
+    `;
+    backdrop.appendChild(modal); document.body.appendChild(backdrop);
+    const field = modal.querySelector('#shareUrlField');
+    field.value = url;
+    const openShare = modal.querySelector('#openShare');
+    openShare.href = url;
+    modal.querySelector('#closeShare').addEventListener('click', ()=> document.body.removeChild(backdrop));
+    modal.querySelector('#copyShare').addEventListener('click', async ()=> {
+      try{
+        await navigator.clipboard.writeText(url);
+        modal.querySelector('#copyShare').textContent = '已複製';
+        setTimeout(()=> modal.querySelector('#copyShare').textContent = '複製連結', 1400);
+      }catch(e){
+        prompt('請手動複製此連結', url);
       }
     });
   }
-  updateBudgetDisplay();
-  renderLineupGallery();
 
-  // switch to lineup view so opening URL directly shows constructed content
-  tabLineup.classList.add('active'); tabCamp.classList.remove('active'); campStage.style.display = 'none'; lineupStage.style.display = '';
-}
+  function applyStateObject(state){
+    if(!state) return;
+    // apply leader + selections
+    if(state.chosenLeaderId && leaders.some(l=>l.id===state.chosenLeaderId)){
+      chosenLeaderId = state.chosenLeaderId;
+    } else {
+      chosenLeaderId = null;
+    }
+    campSelections.clear();
+    selectedOtherA.clear();
+    selectedCtypes.clear();
+    if(Array.isArray(state.campSelections)){
+      state.campSelections.forEach(id => campSelections.add(id));
+    }
+    if(Array.isArray(state.selectedOtherA)){
+      state.selectedOtherA.forEach(id => selectedOtherA.add(id));
+    }
+    if(Array.isArray(state.selectedCtypes)){
+      state.selectedCtypes.forEach(id => selectedCtypes.add(id));
+    }
+    // If leader was not in campSelections, ensure leader included to match chooseLeader behavior
+    if(chosenLeaderId) campSelections.add(chosenLeaderId);
 
-function tryLoadStateFromHash(){
-  const h = location.hash || '';
-  if(!h) return false;
-  const m = h.match(/state=([^&]+)/);
-  if(!m) return false;
-  const token = m[1];
-  const obj = decodeState(token);
-  if(!obj) return false;
-  applyStateObject(obj);
-  return true;
-}
-// ---------------------------
-// ADDED END
-// ---------------------------
+    // render UI for camp
+    renderLeaders();
+    renderACards();
+    renderBCards();
+    renderCCards();
+    updateLimitHints();
+    // build camp cards then restore units
+    buildCampCardsFromSelections();
+
+    // restore inline deck name (if present)
+    if(state.deckName && document.getElementById('inlineDeckName')){
+      document.getElementById('inlineDeckName').value = state.deckName;
+    }
+
+    // now reconstruct units from state.units
+    units.length = 0;
+    usedBudget = 0;
+    if(Array.isArray(state.units)){
+      state.units.forEach(u=>{
+        const cardId = u.cardId;
+        const isLeader = !!u.isLeader;
+        const cardInfo = campCards.find(c=>c.id===cardId) || null;
+        const uid = (isLeader ? 'leader_' + Date.now() + '_' + Math.floor(Math.random()*1000) : 'u_' + Date.now() + '_' + Math.floor(Math.random()*1000));
+        const upgradesArr = Array.isArray(u.upgrades) ? u.upgrades : [];
+        const upSet = new Set(upgradesArr.filter(k => UPGRADES.some(x=>x.key===k)));
+        let upgradesCost = 0;
+        upSet.forEach(k => { const up = UPGRADES.find(x=>x.key===k); if(up) upgradesCost += up.cost; });
+        units.push({ uid, cardId, cardName: cardInfo ? cardInfo.name : (u.cardName || ''), upgrades: upSet, upgradesCost, isLeader });
+        if(!isLeader && cardInfo) {
+          lineupCounts.set(cardId, (lineupCounts.get(cardId)||0) + 1);
+          usedBudget += (cardInfo.cost + upgradesCost);
+        } else if(isLeader && cardInfo){
+          // leader has cost 0 in camp model
+          usedBudget += upgradesCost;
+        } else {
+          usedBudget += upgradesCost;
+        }
+      });
+    }
+    updateBudgetDisplay();
+    renderLineupGallery();
+
+    // switch to lineup view so opening URL directly shows constructed content
+    tabLineup.classList.add('active'); tabCamp.classList.remove('active'); campStage.style.display = 'none'; lineupStage.style.display = '';
+  }
+
+  function tryLoadStateFromHash(){
+    const h = location.hash || '';
+    if(!h) return false;
+    const m = h.match(/state=([^&]+)/);
+    if(!m) return false;
+    const token = m[1];
+    const obj = decodeState(token);
+    if(!obj) return false;
+    applyStateObject(obj);
+    return true;
+  }
+  // ---------------------------
+  // ADDED END
+  // ---------------------------
+
   // Init and event wiring (same as previous)
   async function init(){
     document.getElementById('enterLineupBtn').disabled = true;
@@ -1047,8 +1072,9 @@ function tryLoadStateFromHash(){
     document.getElementById('clearLineupBtn').disabled = true;
     document.getElementById('resetCampBtn').disabled = true;
     /* START ADDED (init): disable share button during preload */
-document.getElementById('shareBtn').disabled = true;
-/* END ADDED (init) */
+    document.getElementById('shareBtn').disabled = true;
+    /* END ADDED (init) */
+
     await preloadImagesForAll();
 
     document.getElementById('enterLineupBtn').disabled = false;
@@ -1056,13 +1082,14 @@ document.getElementById('shareBtn').disabled = true;
     document.getElementById('clearLineupBtn').disabled = false;
     document.getElementById('resetCampBtn').disabled = false;
     /* START ADDED (init): enable share button after preload */
-document.getElementById('shareBtn').disabled = false;
-/* END ADDED (init) */
+    document.getElementById('shareBtn').disabled = false;
+    /* END ADDED (init) */
 
     renderLeaders(); renderACards(); renderBCards(); renderCCards(); updateLimitHints();
+
     /* START ADDED (init): try load state from URL hash after preload */
-tryLoadStateFromHash();
-/* END ADDED (init) */
+    tryLoadStateFromHash();
+    /* END ADDED (init) */
   }
 
   document.getElementById('tabCamp').addEventListener('click', ()=> { tabCamp.classList.add('active'); tabLineup.classList.remove('active'); campStage.style.display = ''; lineupStage.style.display = 'none'; });
@@ -1079,20 +1106,22 @@ tryLoadStateFromHash();
   document.getElementById('resetCampBtn').addEventListener('click', ()=> { if(!confirm('重置大本營會清除已選擇內容，確定嗎？')) return; resetCamp(); });
   document.getElementById('backToCampBtn').addEventListener('click', ()=> { tabCamp.click(); });
   document.getElementById('clearLineupBtn').addEventListener('click', ()=> { if(!confirm('重置先發將清除所有選擇數量與升級，確定嗎？')) return; const leaderUnit = units.find(u => u.isLeader); units.length = 0; if(leaderUnit) units.push(leaderUnit); lineupCounts.clear(); campCards.forEach(c => lineupCounts.set(c.id, c.isLeader ? 1 : 0)); usedBudget = 0; updateBudgetDisplay(); renderLineupGallery(); });
-// START ADDED: share button handler
-// ADDED START
-// SHARE 按鈕
-document.getElementById('shareBtn').addEventListener('click', ()=> {
-  // ensure campCards/units state is current
-  // if user is still in camp stage, build camp first so share captures camp cards
-  if(campStage.style.display !== 'none'){
-    if(!chosenLeaderId){ alert('請先選擇一位領主。'); return; }
-    buildCampCardsFromSelections();
-  }
-  openShareModal();
-});
-// ADDED END
-// END ADDED: share button handler
+
+  // START ADDED: share button handler
+  // ADDED START
+  // SHARE 按鈕
+  document.getElementById('shareBtn').addEventListener('click', ()=> {
+    // ensure campCards/units state is current
+    // if user is still in camp stage, build camp first so share captures camp cards
+    if(campStage.style.display !== 'none'){
+      if(!chosenLeaderId){ alert('請先選擇一位領主。'); return; }
+      buildCampCardsFromSelections();
+    }
+    openShareModal();
+  });
+  // ADDED END
+  // END ADDED: share button handler
+
   // CONFIRM: check selected units count (including leader) is 7~10 before opening confirm modal
   document.getElementById('confirmBtn').addEventListener('click', ()=> {
     const totalSelectedUnits = units.length; // includes leader if present
@@ -1119,6 +1148,11 @@ document.getElementById('shareBtn').addEventListener('click', ()=> {
       <div style="font-size:12px;margin-top:8px;color:#cfe8ff">備註：使用 repo 的相對路徑 images/，在 GitHub Pages 中 CORS 不會阻擋。</div>
     `;
     backdrop.appendChild(modal); document.body.appendChild(backdrop);
+
+    // ADDED: prefill modal deckName from inline input if available
+    const inlineName = (document.getElementById('inlineDeckName') && document.getElementById('inlineDeckName').value) || '';
+    modal.querySelector('#deckName').value = inlineName;
+
     modal.querySelector('#cancelExport').addEventListener('click', ()=> document.body.removeChild(backdrop));
     modal.querySelector('#doExport').addEventListener('click', async ()=> { const name = modal.querySelector('#deckName').value || '未命名牌組'; const tactics = modal.querySelector('#deckTactics').value || ''; await exportDeckAsImage(name, tactics); document.body.removeChild(backdrop); });
   }
@@ -1127,14 +1161,3 @@ document.getElementById('shareBtn').addEventListener('click', ()=> {
 </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
