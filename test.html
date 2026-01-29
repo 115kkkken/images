@@ -180,14 +180,28 @@
           <div id="selectedUnits" class="selected-units"></div>
         </div>
 
+        <!-- START ADDED: inline deck name input (placed at bottom of lineup panel) -->
+        <div style="margin-top:12px;">
+          <label style="display:block;margin-bottom:6px;color:#cfe8ff;font-weight:700;">牌組名稱</label>
+          <input id="inlineDeckName" type="text" placeholder="在此輸入牌組名稱" style="width:100%;box-sizing:border-box;padding:8px;border-radius:6px;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.02);color:#fff;">
+        </div>
+        <div style="margin-top:12px;">
+          <label style="display:block;margin-bottom:6px;color:#cfe8ff;font-weight:700;">打法戰術</label>
+          <input id="inlineDeckTactics" type="text" placeholder="在此輸入牌組打法、戰術、特色" style="width:100%;box-sizing:border-box;padding:8px;border-radius:6px;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.02);color:#fff;">
+        </div>
+        <!-- END ADDED: inline deck name input -->
+
       </div>
 
       <div class="footer-actions" style="margin-top:14px;">
         <button class="btn-primary" id="confirmBtn">確認軍表</button>
         <button class="btn-ghost" id="backToCampBtn">返回編輯大本營</button>
         <button class="btn-ghost" id="clearLineupBtn">重置軍表構築</button>
-        <!-- 新增：產生分享連結 -->
+        <!-- START ADDED HTML: share button -->
+        <!-- ADDED START: share button (生成分享連結) -->
         <button class="btn-ghost" id="shareBtn" title="生成可重現此構築的網址">生成分享連結</button>
+        <!-- ADDED END: share button -->
+        <!-- END ADDED HTML -->
       </div>
     </div>
 
@@ -883,32 +897,43 @@
   }
 
   // ---------------------------
-  // State serialization / sharing
+  // START ADDED JS: State serialization / sharing (localStorage-based short URLs, fallback to encoded state)
   // ---------------------------
-  // encode unicode-safe base64 then URI-encode
-  function encodeState(obj){
+
+  // generate short random id (base62)
+  function generateShortId(len = 8) {
+    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let s = '';
+    for (let i = 0; i < len; i++) s += chars.charAt(Math.floor(Math.random() * chars.length));
+    return s;
+  }
+
+  // fallback encode/decode (base64 + URI) in case localStorage is not available
+  function encodeStateFallback(obj){
     try{
       const s = JSON.stringify(obj);
       const b = btoa(unescape(encodeURIComponent(s)));
       return encodeURIComponent(b);
     }catch(e){
-      console.error('encodeState error', e);
+      console.error('encodeStateFallback error', e);
       return '';
     }
   }
-  function decodeState(token){
+  function decodeStateFallback(token){
     try{
       const b = decodeURIComponent(token);
       const s = decodeURIComponent(escape(atob(b)));
       return JSON.parse(s);
     }catch(e){
-      console.warn('decodeState failed', e);
+      console.warn('decodeStateFallback failed', e);
       return null;
     }
   }
 
   function buildShareState(){
     // minimal necessary state to rebuild: leader, campSelections, selectedOtherA, selectedCtypes, units (cardId + upgrades)
+    const deckName = (document.getElementById('inlineDeckName') && document.getElementById('inlineDeckName').value) || '';
+    const deckTactics = (document.getElementById('inlineDeckTactics') && document.getElementById('inlineDeckTactics').value) || '';
     const state = {
       chosenLeaderId,
       campSelections: Array.from(campSelections),
@@ -918,16 +943,43 @@
         cardId: u.cardId,
         upgrades: Array.from(u.upgrades || []),
         isLeader: !!u.isLeader
-      }))
+      })),
+      deckName,
+      tactics: deckTactics
     };
     return state;
   }
 
+  // Try to save state to localStorage under short key; return short url if success.
+  // If localStorage fails, return fallback long url containing encoded state in hash.
   function generateShareUrl(){
     const state = buildShareState();
-    const token = encodeState(state);
-    if(!token) return null;
-    // use hash to avoid server involvement
+    // try localStorage
+    try{
+      if (typeof localStorage !== 'undefined' && localStorage) {
+        // generate id and store
+        const maxAttempts = 6;
+        for (let i=0;i<maxAttempts;i++){
+          const id = generateShortId(8);
+          const key = 'deck_' + id;
+          if (!localStorage.getItem(key)){
+            localStorage.setItem(key, JSON.stringify(state));
+            // short URL using id
+            return `${location.origin}${location.pathname}#id=${id}`;
+          }
+        }
+        // if collision or full, fall back to full store under timestamp
+        const fallbackKey = 'deck_auto_' + Date.now();
+        localStorage.setItem(fallbackKey, JSON.stringify(state));
+        return `${location.origin}${location.pathname}#key=${encodeURIComponent(fallbackKey)}`;
+      }
+    }catch(e){
+      // localStorage not available or quota exceeded -> fallback to encoded state in URL
+      console.warn('localStorage not available for sharing, falling back to full-state hash.', e);
+    }
+    // fallback: embed encoded state in hash (long)
+    const token = encodeStateFallback(state);
+    if (!token) return null;
     return `${location.origin}${location.pathname}#state=${token}`;
   }
 
@@ -945,6 +997,7 @@
         <button id="copyShare" class="btn-primary">複製連結</button>
         <a id="openShare" class="btn-primary" style="text-decoration:none;color:#012;display:inline-flex;align-items:center;justify-content:center;" target="_blank">在新分頁開啟</a>
       </div>
+      <div style="font-size:12px;margin-top:8px;color:#cfe8ff">備註：若使用短 ID（#id=...），狀態存在於你的瀏覽器 localStorage 中，其他人開啟時會直接還原（需相同檔案/程式）。若分享給他人，建議使用「複製連結」並把該短連結傳給對方。</div>
     `;
     backdrop.appendChild(modal); document.body.appendChild(backdrop);
     const field = modal.querySelector('#shareUrlField');
@@ -963,6 +1016,7 @@
     });
   }
 
+  // apply loaded state object into UI
   function applyStateObject(state){
     if(!state) return;
     // apply leader + selections
@@ -983,7 +1037,7 @@
     if(Array.isArray(state.selectedCtypes)){
       state.selectedCtypes.forEach(id => selectedCtypes.add(id));
     }
-    // If leader was not in campSelections, ensure leader included to match chooseLeader behavior
+    // ensure leader included
     if(chosenLeaderId) campSelections.add(chosenLeaderId);
 
     // render UI for camp
@@ -994,6 +1048,15 @@
     updateLimitHints();
     // build camp cards then restore units
     buildCampCardsFromSelections();
+
+    // restore inline deck name (if present)
+    if(state.deckName && document.getElementById('inlineDeckName')){
+      document.getElementById('inlineDeckName').value = state.deckName;
+    }
+    // restore inline deck tactics (if present)
+    if(state.tactics && document.getElementById('inlineDeckTactics')){
+      document.getElementById('inlineDeckTactics').value = state.tactics;
+    }
 
     // now reconstruct units from state.units
     units.length = 0;
@@ -1027,27 +1090,72 @@
     tabLineup.classList.add('active'); tabCamp.classList.remove('active'); campStage.style.display = 'none'; lineupStage.style.display = '';
   }
 
+  // try to load from URL hash: supports #id=SHORTID (localStorage), #key=..., or #state=ENCODED (fallback)
   function tryLoadStateFromHash(){
     const h = location.hash || '';
     if(!h) return false;
-    const m = h.match(/state=([^&]+)/);
-    if(!m) return false;
-    const token = m[1];
-    const obj = decodeState(token);
-    if(!obj) return false;
-    applyStateObject(obj);
-    return true;
+    // check id=
+    let m = h.match(/[#&]id=([^&]+)/);
+    if(m){
+      const id = decodeURIComponent(m[1]);
+      const key = 'deck_' + id;
+      try{
+        const raw = localStorage.getItem(key);
+        if(raw){
+          const obj = JSON.parse(raw);
+          applyStateObject(obj);
+          return true;
+        } else {
+          console.warn('No localStorage entry for id:', id);
+          return false;
+        }
+      }catch(e){
+        console.warn('Error reading localStorage for id', id, e);
+        return false;
+      }
+    }
+    // check key=
+    m = h.match(/[#&]key=([^&]+)/);
+    if(m){
+      const k = decodeURIComponent(m[1]);
+      try{
+        const raw = localStorage.getItem(k);
+        if(raw){
+          const obj = JSON.parse(raw);
+          applyStateObject(obj);
+          return true;
+        } else {
+          console.warn('No localStorage entry for key:', k);
+          return false;
+        }
+      }catch(e){
+        console.warn('Error reading localStorage for key', k, e);
+        return false;
+      }
+    }
+    // check state= (fallback long encoded)
+    m = h.match(/[#&]state=([^&]+)/);
+    if(m){
+      const token = m[1];
+      const obj = decodeStateFallback(token);
+      if(obj){ applyStateObject(obj); return true; }
+      return false;
+    }
+    return false;
   }
+  // ---------------------------
+  // ADDED END
+  // ---------------------------
 
-  // ---------------------------
   // Init and event wiring (same as previous)
-  // ---------------------------
   async function init(){
     document.getElementById('enterLineupBtn').disabled = true;
     document.getElementById('confirmBtn').disabled = true;
     document.getElementById('clearLineupBtn').disabled = true;
     document.getElementById('resetCampBtn').disabled = true;
+    /* START ADDED (init): disable share button during preload */
     document.getElementById('shareBtn').disabled = true;
+    /* END ADDED (init) */
 
     await preloadImagesForAll();
 
@@ -1055,12 +1163,15 @@
     document.getElementById('confirmBtn').disabled = false;
     document.getElementById('clearLineupBtn').disabled = false;
     document.getElementById('resetCampBtn').disabled = false;
+    /* START ADDED (init): enable share button after preload */
     document.getElementById('shareBtn').disabled = false;
+    /* END ADDED (init) */
 
     renderLeaders(); renderACards(); renderBCards(); renderCCards(); updateLimitHints();
 
-    // If URL has state, load it after preload so images are available
+    /* START ADDED (init): try load state from URL hash after preload */
     tryLoadStateFromHash();
+    /* END ADDED (init) */
   }
 
   document.getElementById('tabCamp').addEventListener('click', ()=> { tabCamp.classList.add('active'); tabLineup.classList.remove('active'); campStage.style.display = ''; lineupStage.style.display = 'none'; });
@@ -1076,18 +1187,10 @@
 
   document.getElementById('resetCampBtn').addEventListener('click', ()=> { if(!confirm('重置大本營會清除已選擇內容，確定嗎？')) return; resetCamp(); });
   document.getElementById('backToCampBtn').addEventListener('click', ()=> { tabCamp.click(); });
-  document.getElementById('clearLineupBtn').addEventListener('click', ()=> { if(!confirm('重置先發將清除所有選擇數量與升級，確定嗎？')) return; const leaderUnit = units.find(u => u.isLeader); units.length = 0; if(leaderUnit) units.push(leaderUnit); lineupCounts.clear(); campCards.forEach(c => lineupCounts.set(c.id, c.isLeader ? 1 : 0)); usedBudget = 0; updateBudgetDisplay(); renderLineupGallery(); });
+  document.getElementById('clearLineupBtn').addEventListener('click', ()=> { if(!confirm('重���先發將清除所有選擇數量與升級，確定嗎？')) return; const leaderUnit = units.find(u => u.isLeader); units.length = 0; if(leaderUnit) units.push(leaderUnit); lineupCounts.clear(); campCards.forEach(c => lineupCounts.set(c.id, c.isLeader ? 1 : 0)); usedBudget = 0; updateBudgetDisplay(); renderLineupGallery(); });
 
-  // CONFIRM: check selected units count (including leader) is 7~10 before opening confirm modal
-  document.getElementById('confirmBtn').addEventListener('click', ()=> {
-    const totalSelectedUnits = units.length; // includes leader if present
-    if(totalSelectedUnits < 7 || totalSelectedUnits > 10){
-      showCountNotification(`先發單位數量必須為 7 ~ 10 張（包含領主）。目前已選擇 ${totalSelectedUnits} 張。請調整後再確認。`);
-      return;
-    }
-    openConfirmModal();
-  });
-
+  // START ADDED: share button handler
+  // ADDED START
   // SHARE 按鈕
   document.getElementById('shareBtn').addEventListener('click', ()=> {
     // ensure campCards/units state is current
@@ -1097,6 +1200,18 @@
       buildCampCardsFromSelections();
     }
     openShareModal();
+  });
+  // ADDED END
+  // END ADDED: share button handler
+
+  // CONFIRM: check selected units count (including leader) is 7~10 before opening confirm modal
+  document.getElementById('confirmBtn').addEventListener('click', ()=> {
+    const totalSelectedUnits = units.length; // includes leader if present
+    if(totalSelectedUnits < 7 || totalSelectedUnits > 10){
+      showCountNotification(`先發單位數量必須為 7 ~ 10 張（包含領主）。目前已選擇 ${totalSelectedUnits} 張。請調整後再確認。`);
+      return;
+    }
+    openConfirmModal();
   });
 
   function openConfirmModal(){
@@ -1115,6 +1230,14 @@
       <div style="font-size:12px;margin-top:8px;color:#cfe8ff">備註：使用 repo 的相對路徑 images/，在 GitHub Pages 中 CORS 不會阻擋。</div>
     `;
     backdrop.appendChild(modal); document.body.appendChild(backdrop);
+
+    // ADDED: prefill modal deckName from inline input if available
+    const inlineName = (document.getElementById('inlineDeckName') && document.getElementById('inlineDeckName').value) || '';
+    modal.querySelector('#deckName').value = inlineName;
+    // ADDED: prefill modal deckTactics from inline tactics input if available
+    const inlineTactics = (document.getElementById('inlineDeckTactics') && document.getElementById('inlineDeckTactics').value) || '';
+    modal.querySelector('#deckTactics').value = inlineTactics;
+
     modal.querySelector('#cancelExport').addEventListener('click', ()=> document.body.removeChild(backdrop));
     modal.querySelector('#doExport').addEventListener('click', async ()=> { const name = modal.querySelector('#deckName').value || '未命名牌組'; const tactics = modal.querySelector('#deckTactics').value || ''; await exportDeckAsImage(name, tactics); document.body.removeChild(backdrop); });
   }
